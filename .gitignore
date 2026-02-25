@@ -1,0 +1,44 @@
+# ========================
+# COD CRM - Multi-Tenant eCommerce CRM SaaS
+# ========================
+
+# === Dependencies ===
+node_modules/
+vendor/
+
+# === Environment ===
+.env
+.env.local
+.env.production
+.env.staging
+
+# === Build outputs ===
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# === Logs & Storage ===
+backend/storage/logs/*.log
+*.log
+npm-debug.log*
+
+# === IDE ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === PHP ===
+*.cache
+*.phar
+
+# === Misc ===
+*.map
+coverage/
+.turbo/

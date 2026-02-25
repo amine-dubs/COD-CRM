@@ -1,0 +1,33 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Handle Authorization Header (important for JWT)
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # Redirect Trailing Slashes If Not A Folder
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)/$ /$1 [L,R=301]
+
+    # Send Requests To Front Controller
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteRule ^ index.php [L]
+</IfModule>
+
+# Block access to sensitive files
+<FilesMatch "\.(env|json|lock|md|sql)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Block access to sensitive directories
+<IfModule mod_rewrite.c>
+    RewriteRule ^(src|config|database|routes|vendor|storage)(/|$) - [F,L]
+</IfModule>
+
+# Prevent directory listing
+Options -Indexes
+
+# Set default charset
+AddDefaultCharset UTF-8
