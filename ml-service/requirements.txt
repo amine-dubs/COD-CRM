@@ -19,7 +19,7 @@ hdbscan==0.8.39
 neuralprophet==0.9.0
 
 # LLM Integration
-google-generativeai==0.8.4
+google-genai>=1.0.0
 
 # Database
 mysql-connector-python==9.1.0

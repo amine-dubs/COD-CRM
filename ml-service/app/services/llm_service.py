@@ -30,27 +30,28 @@ PERIOD_NAMES = {
     "ar": {"day": "اليومية", "week": "الاسبوعية", "month": "الشهرية"},
 }
 
+GEMINI_MODEL = "gemini-2.5-flash-preview-05-20"
+
 
 class LLMService:
     """Google Gemini API integration for natural language insights."""
 
     def __init__(self):
-        self.model = None
+        self.client = None
         self._initialized = False
         self._initialize()
 
     def _initialize(self):
-        """Initialize the Gemini client."""
+        """Initialize the Gemini client using the new google-genai SDK."""
         if not settings.GEMINI_API_KEY:
             logger.warning("GEMINI_API_KEY not set. LLM insights will not be available.")
             return
 
         try:
-            import google.generativeai as genai
-            genai.configure(api_key=settings.GEMINI_API_KEY)
-            self.model = genai.GenerativeModel("gemini-3.1-pro-preview")
+            from google import genai
+            self.client = genai.Client(api_key=settings.GEMINI_API_KEY)
             self._initialized = True
-            logger.info("Gemini LLM service initialized successfully")
+            logger.info("Gemini LLM service initialized successfully (model: %s)", GEMINI_MODEL)
         except Exception as e:
             logger.error("Failed to initialize Gemini: %s", e)
 
@@ -82,7 +83,11 @@ Provide:
 Keep the summary concise (200-300 words). Focus on actionable insights."""
 
         try:
-            response = self.model.generate_content(prompt)
+            from google import genai
+            response = self.client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+            )
             return {
                 "summary": response.text,
                 "lang": lang,
@@ -114,7 +119,11 @@ Risk Factors:
 Provide a 2-3 sentence explanation that a non-technical store manager can understand. Include what action they should take."""
 
         try:
-            response = self.model.generate_content(prompt)
+            from google import genai
+            response = self.client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+            )
             return {
                 "explanation": response.text,
                 "score": score,
@@ -145,7 +154,11 @@ Provide 3-5 specific, actionable recommendations. For each recommendation:
 Keep each recommendation concise (2-3 sentences)."""
 
         try:
-            response = self.model.generate_content(prompt)
+            from google import genai
+            response = self.client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+            )
             return {
                 "recommendations": response.text,
                 "lang": lang,
