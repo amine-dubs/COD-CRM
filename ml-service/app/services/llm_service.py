@@ -30,7 +30,7 @@ PERIOD_NAMES = {
     "ar": {"day": "اليومية", "week": "الاسبوعية", "month": "الشهرية"},
 }
 
-GEMINI_MODEL = "gemini-2.5-flash-preview-05-20"
+GEMINI_MODEL = "gemini-3.1-pro-preview"
 
 
 class LLMService:

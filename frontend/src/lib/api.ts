@@ -21,9 +21,13 @@ async function fetchApi<T>(
   options?: RequestInit
 ): Promise<T> {
   const url = `${ML_BASE_URL}${endpoint}`;
+  const headers: Record<string, string> = {};
+  if (options?.body && !(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
   const res = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
     ...options,
+    headers: { ...headers, ...options?.headers },
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: res.statusText }));
