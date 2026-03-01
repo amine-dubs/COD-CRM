@@ -341,10 +341,10 @@ add_text_box(slide, Inches(0.7), Inches(2.0), Inches(11), Inches(0.4),
 # Feature categories
 feat_data = [
     ("Temporelles", "4 features", "Heure, jour, mois, weekend", ACCENT_BLUE),
-    ("Valeur", "4 features", "Montant, frais, remise, sous-total", ACCENT_GREEN),
-    ("Produit", "1 feature", "Nombre d'articles", ACCENT_ORANGE),
-    ("Client", "4 features", "Historique, taux succes, recurrence", ACCENT_PURPLE),
-    ("Contexte", "4 features", "Taux regional, categorie, delai, poids", ACCENT_RED),
+    ("Valeur", "5 features", "Montant, frais, remise, sous-total, ratio", ACCENT_GREEN),
+    ("Produit", "3 features", "Articles, prix cat., popularite cat.", ACCENT_ORANGE),
+    ("Client", "5 features", "Tel. alt, recurrence, nb commandes, CLV, source", ACCENT_PURPLE),
+    ("Contexte", "3 features", "Volume regional, delai, poids", ACCENT_RED),
 ]
 
 for i, (cat, count, desc, color) in enumerate(feat_data):
@@ -390,7 +390,7 @@ add_text_box(slide, Inches(0.7), Inches(0.5), Inches(10), Inches(0.8),
 add_accent_bar(slide)
 
 add_text_box(slide, Inches(0.7), Inches(1.8), Inches(11), Inches(0.4),
-             "Ensemble de test : 19 889 echantillons (80/20 split stratifie)", font_size=14, color=MED_GRAY)
+             "Ensemble de test : 19 889 echantillons (80/20 split stratifie)  |  20 features sans fuite de donnees", font_size=14, color=MED_GRAY)
 
 # Table header
 headers = ["Modele", "AUC-ROC", "Accuracy", "Precision", "Rappel", "F1-Score"]
@@ -405,10 +405,10 @@ for j, (h, w) in enumerate(zip(headers, col_widths)):
 
 # Table rows
 rows = [
-    ("CatBoost", "1.0000", "0.9982", "0.9999", "0.9983", "0.9991"),
-    ("LightGBM", "1.0000", "0.9983", "0.9992", "0.9990", "0.9991"),
-    ("XGBoost", "1.0000", "0.9983", "0.9999", "0.9983", "0.9991"),
-    ("Ensemble", "1.0000", "0.9983", "0.9998", "0.9984", "0.9991"),
+    ("CatBoost", "0.6760", "0.9422", "0.9782", "0.9619", "0.9700"),
+    ("LightGBM", "0.6818", "0.9481", "0.9790", "0.9672", "0.9731"),
+    ("XGBoost", "0.6950", "0.9446", "0.9790", "0.9636", "0.9712"),
+    ("Ensemble", "0.6942", "0.9585", "0.9789", "0.9783", "0.9786"),
 ]
 
 for i, row in enumerate(rows):
@@ -433,8 +433,8 @@ add_text_box(slide, Inches(0.9), Inches(5.2), Inches(5), Inches(0.4),
 # Simple confusion matrix
 cm_data = [
     ("", "Predit: Echouee", "Predit: Livree"),
-    ("Reel: Echouee", "590 (VN)", "3 (FP)"),
-    ("Reel: Livree", "31 (FN)", "19 265 (VP)"),
+    ("Reel: Echouee", "186 (VN)", "407 (FP)"),
+    ("Reel: Livree", "418 (FN)", "18 878 (VP)"),
 ]
 
 for i, row in enumerate(cm_data):
@@ -467,9 +467,9 @@ insight_box.line.width = Pt(2)
 add_text_box(slide, Inches(7.2), Inches(5.4), Inches(5.1), Inches(0.3),
              "Points cles", font_size=14, bold=True, color=ACCENT_ORANGE)
 items_insight = [
-    "AUC-ROC parfait (1.0) pour les 3 modeles",
-    "Seulement 34 erreurs sur 19 889 predictions",
-    "Ensemble retenu pour sa robustesse",
+    "AUC-ROC : 0.69 (metrique honnete, sans fuite de donnees)",
+    "825 erreurs sur 19 889  |  F1-Score : 0.979",
+    "Ensemble retenu pour sa robustesse (vote pondere)",
 ]
 add_bullet_slide_content(slide, items_insight, Inches(7.2), Inches(5.8), Inches(5.1), font_size=12, color=DARK_GRAY, spacing=Pt(2))
 
@@ -541,60 +541,67 @@ add_bg(slide, WHITE)
 add_shape(slide, Inches(0), Inches(0), Inches(0.15), SLIDE_H, ACCENT_GREEN)
 
 add_text_box(slide, Inches(0.7), Inches(0.5), Inches(10), Inches(0.8),
-             "Prevision de la Demande (Prophet)", font_size=34, bold=True, color=DARK_BLUE)
+             "Prevision de la Demande (Chronos)", font_size=34, bold=True, color=DARK_BLUE)
 add_accent_bar(slide)
 
 add_text_box(slide, Inches(0.7), Inches(1.8), Inches(11), Inches(0.4),
-             "Serie temporelle : Chiffre d'affaires quotidien en DZD sur 714 jours",
-             font_size=15, color=MED_GRAY)
+             "Benchmark de 8 modeles  |  Serie temporelle : CA quotidien DZD sur 714 jours  |  Evaluation out-of-sample",
+             font_size=14, color=MED_GRAY)
 
-# Prophet vs Moving Average comparison
-# Header
-for j, (h, w) in enumerate([("Modele", 3.5), ("MAE (DZD)", 3.0), ("RMSE (DZD)", 3.0), ("Amelioration", 2.5)]):
-    x = Inches(0.9) + Inches(sum([3.5, 3.0, 3.0, 2.5][:j]))
-    box = add_shape(slide, x, Inches(2.5), Inches(w), Inches(0.55), DARK_BLUE)
-    add_text_box(slide, x, Inches(2.53), Inches(w), Inches(0.5),
-                 h, font_size=15, bold=True, color=WHITE, alignment=PP_ALIGN.CENTER)
+# Benchmark table header
+bench_headers = [("Modele", 3.0), ("MAE (DZD)", 2.5), ("RMSE (DZD)", 2.5), ("MAPE", 2.0), ("vs MA7", 2.0)]
+for j, (h, w) in enumerate(bench_headers):
+    x = Inches(0.6) + Inches(sum([bw for _, bw in bench_headers[:j]]))
+    box = add_shape(slide, x, Inches(2.3), Inches(w), Inches(0.45), DARK_BLUE)
+    add_text_box(slide, x, Inches(2.32), Inches(w), Inches(0.4),
+                 h, font_size=13, bold=True, color=WHITE, alignment=PP_ALIGN.CENTER)
 
-# Baseline row
-baseline_row = [("Moyenne Mobile (7j)", 3.5), ("301 401", 3.0), ("371 511", 3.0), ("--- (baseline)", 2.5)]
-for j, (val, w) in enumerate(baseline_row):
-    x = Inches(0.9) + Inches(sum([3.5, 3.0, 3.0, 2.5][:j]))
-    box = add_shape(slide, x, Inches(3.05), Inches(w), Inches(0.55), LIGHT_GRAY)
-    add_text_box(slide, x, Inches(3.08), Inches(w), Inches(0.5),
-                 val, font_size=14, color=DARK_GRAY, alignment=PP_ALIGN.CENTER)
+# Benchmark rows (30-day horizon)
+bench_rows = [
+    ("Naive (last value)", "422 968", "489 543", "231%", "-40.3%", LIGHT_GRAY),
+    ("Seasonal Naive (7d)", "327 196", "437 764", "170%", "-8.6%", WHITE),
+    ("Moyenne Mobile (7j)", "301 401", "371 511", "156%", "baseline", LIGHT_GRAY),
+    ("Holt-Winters (ETS)", "400 363", "485 037", "175%", "-32.8%", WHITE),
+    ("SARIMAX", "413 834", "468 574", "250%", "-37.3%", LIGHT_GRAY),
+    ("Prophet", "347 629", "417 498", "175%", "-15.3%", WHITE),
+    ("Chronos-T5-Small", "331 551", "382 864", "136%", "-10.0%", ACCENT_GREEN),
+]
 
-# Prophet row (highlighted)
-prophet_row = [("Prophet", 3.5), ("265 663", 3.0), ("363 848", 3.0), ("-11.9% MAE", 2.5)]
-for j, (val, w) in enumerate(prophet_row):
-    x = Inches(0.9) + Inches(sum([3.5, 3.0, 3.0, 2.5][:j]))
-    box = add_shape(slide, x, Inches(3.6), Inches(w), Inches(0.55), ACCENT_GREEN)
-    add_text_box(slide, x, Inches(3.63), Inches(w), Inches(0.5),
-                 val, font_size=14, bold=True, color=WHITE, alignment=PP_ALIGN.CENTER)
+for i, (name, mae, rmse, mape, imp, bg) in enumerate(bench_rows):
+    y = Inches(2.75) + Inches(0.42) * i
+    is_best = (bg == ACCENT_GREEN)
+    for j, (val, w) in enumerate(zip([name, mae, rmse, mape, imp], [bw for _, bw in bench_headers])):
+        x = Inches(0.6) + Inches(sum([bw for _, bw in bench_headers[:j]]))
+        fill = ACCENT_GREEN if is_best else bg
+        box = add_shape(slide, x, y, Inches(w), Inches(0.42), fill)
+        txt_color = WHITE if is_best else DARK_GRAY
+        bld = is_best
+        add_text_box(slide, x, y + Pt(2), Inches(w), Inches(0.38),
+                     val, font_size=12, bold=bld, color=txt_color, alignment=PP_ALIGN.CENTER)
 
-# Prophet config
-add_text_box(slide, Inches(0.9), Inches(4.5), Inches(5), Inches(0.4),
-             "Configuration Prophet", font_size=18, bold=True, color=DARK_BLUE)
+# Chronos config (left)
+add_text_box(slide, Inches(0.7), Inches(5.9), Inches(5.5), Inches(0.4),
+             "Amazon Chronos-T5-Small", font_size=18, bold=True, color=DARK_BLUE)
 
 config_items = [
-    "Saisonnalite annuelle + hebdomadaire",
-    "Mode multiplicatif",
-    "changepoint_prior_scale = 0.05",
-    "4 modeles : global + 3 categories",
+    "Transformeur pre-entraine (46M parametres)",
+    "Zero-shot : pas de fine-tuning necessaire",
+    "Meilleur RMSE (382K) et MAPE (136%)",
+    "4 series : global + 3 categories produit",
 ]
-add_bullet_slide_content(slide, config_items, Inches(0.9), Inches(5.0), Inches(5), font_size=14)
+add_bullet_slide_content(slide, config_items, Inches(0.7), Inches(6.35), Inches(5.5), font_size=12, spacing=Pt(2))
 
-# Categories
-add_text_box(slide, Inches(7.0), Inches(4.5), Inches(5), Inches(0.4),
-             "Modeles par categorie", font_size=18, bold=True, color=DARK_BLUE)
-
-cat_items = [
-    "all (global) - CA total quotidien",
-    "bed_bath_table - Linge de maison",
-    "health_beauty - Sante et beaute",
-    "sports_leisure - Sports et loisirs",
+# Key insight (right)
+insight_box2 = add_rounded_shape(slide, Inches(6.8), Inches(5.85), Inches(5.7), Inches(1.3), RGBColor(0xD5, 0xE8, 0xD4), ACCENT_GREEN)
+insight_box2.line.width = Pt(2)
+add_text_box(slide, Inches(7.0), Inches(5.9), Inches(5.3), Inches(0.3),
+             "Pourquoi Chronos ?", font_size=14, bold=True, color=ACCENT_GREEN)
+insight_items = [
+    "RMSE le plus bas : predictions les plus stables",
+    "MAPE le plus bas : proportionnellement le plus precis",
+    "Intervalles de confiance natifs (10e-90e percentile)",
 ]
-add_bullet_slide_content(slide, cat_items, Inches(7.0), Inches(5.0), Inches(5.5), font_size=14)
+add_bullet_slide_content(slide, insight_items, Inches(7.0), Inches(6.25), Inches(5.3), font_size=12, color=DARK_GRAY, spacing=Pt(2))
 
 add_slide_number(slide, 12, TOTAL_SLIDES)
 
@@ -696,7 +703,7 @@ add_text_box(slide, Inches(7.0), Inches(2.1), Inches(5.6), Inches(0.4),
 saved_items = [
     "risk_ensemble.joblib (4 MB) - Ensemble CatBoost+LightGBM+XGBoost",
     "segmenter.joblib (9.7 MB) - HDBSCAN clustering",
-    "forecaster_models.joblib (278 KB) - 4 Prophet models",
+    "forecaster_models.joblib - Donnees series temporelles (Chronos)",
     "metrics.json (3 KB) - Toutes les metriques d'evaluation",
 ]
 add_bullet_slide_content(slide, saved_items, Inches(7.0), Inches(2.6), Inches(5.6), font_size=12, spacing=Pt(2))
@@ -734,9 +741,9 @@ add_text_box(slide, Inches(0.7), Inches(1.7), Inches(5.5), Inches(0.4),
 
 contributions = [
     "CRM complet : 12 tables, 11 modules, multi-tenant",
-    "Ensemble ML (CatBoost+LightGBM+XGBoost) : F1 = 0.999",
+    "Ensemble ML (CatBoost+LightGBM+XGBoost) : F1 = 0.979, AUC = 0.694",
     "Segmentation automatique : 5 profils clients (HDBSCAN)",
-    "Prevision Prophet : -42.3% MAE vs baseline",
+    "Prevision Chronos : meilleur RMSE et MAPE (8 modeles testes)",
     "Integration LLM (Gemini) multilingue AR/FR/EN",
     "API de reentrainement : upload CSV, backup, rollback",
 ]
@@ -748,7 +755,7 @@ add_text_box(slide, Inches(7.0), Inches(1.7), Inches(5.5), Inches(0.4),
 
 perspectives = [
     "Reentrainement sur donnees reelles algeriennes",
-    "Modeles deep learning (TabTransformer, N-BEATS)",
+    "Saisonnalite locale (Ramadan, Aid Adha, etc.)",
     "Apprentissage en ligne (mise a jour continue)",
     "A/B testing de l'impact des recommandations ML",
 ]

@@ -28,7 +28,7 @@ A production-ready, multi-tenant CRM SaaS platform for Algerian COD (Cash-on-Del
 | ML Service | Python 3.10+, FastAPI, scikit-learn, XGBoost, CatBoost, LightGBM |
 | Database | MySQL 8.0+ |
 | Auth | JWT (Access + Refresh tokens) |
-| LLM | Google Gemini 2.0 Flash (multilingual insights AR/FR/EN) |
+| LLM | Google Gemini 2.5 Flash (multilingual insights AR/FR/EN) |
 | Architecture | Multi-tenant (single DB, `store_id` isolation) |
 
 ---
@@ -46,7 +46,7 @@ A production-ready, multi-tenant CRM SaaS platform for Algerian COD (Cash-on-Del
 ### ML Module
 - **Order Risk Prediction** — Ensemble model (CatBoost + LightGBM + XGBoost) scoring each order's delivery failure risk
 - **Customer Segmentation** — HDBSCAN density-based clustering with RFM analysis (5 segments: VIP, Loyal, At Risk, Lost, Regular)
-- **Demand Forecasting** — Prophet time-series model for revenue prediction with confidence intervals
+- **Demand Forecasting** — Amazon Chronos pre-trained transformer for revenue prediction with confidence intervals
 - **AI Insights** — Google Gemini integration for multilingual business recommendations
 - **Model Retraining** — Upload your own CSV dataset, retrain all models, with automatic backup and rollback
 
@@ -86,8 +86,8 @@ COD-CRM/
 │   │   ├── models/          # ML model implementations
 │   │   │   ├── predictor.py     # Risk prediction (ensemble)
 │   │   │   ├── segmenter.py     # Customer segmentation (HDBSCAN)
-│   │   │   ├── forecaster.py    # Demand forecasting (Prophet)
-│   │   │   └── features.py      # Feature engineering (17 features)
+│   │   │   ├── forecaster.py    # Demand forecasting (Chronos transformer)
+│   │   │   └── features.py      # Feature engineering (20 features)
 │   │   ├── routes/          # API endpoints
 │   │   │   ├── predict.py       # POST /api/predict/order-risk
 │   │   │   ├── segment.py       # GET  /api/segment/customers
@@ -106,7 +106,7 @@ COD-CRM/
 │   ├── trained_models/      # Serialized models (production-ready)
 │   │   ├── risk_ensemble.joblib      # CatBoost+LightGBM+XGBoost
 │   │   ├── segmenter.joblib         # HDBSCAN model
-│   │   ├── forecaster_models.joblib  # Prophet models (4 categories)
+│   │   ├── forecaster_models.joblib  # Chronos time series data (4 categories)
 │   │   ├── feature_engineer.joblib   # Feature pipeline
 │   │   ├── segmenter_scaler.joblib   # StandardScaler
 │   │   ├── segment_mapping.joblib    # Segment labels
@@ -141,16 +141,18 @@ COD-CRM/
 
 ### Risk Prediction (Ensemble)
 
-Trained on 99,441 orders (80/20 split). 17 engineered features.
+Trained on 99,441 orders (80/20 split). 20 engineered features (no target leakage).
 
 | Model | AUC-ROC | Accuracy | Precision | Recall | F1-Score |
 |-------|---------|----------|-----------|--------|----------|
-| CatBoost | 0.9999 | 99.82% | 99.99% | 99.83% | 99.91% |
-| LightGBM | 0.9999 | 99.83% | 99.91% | 99.92% | 99.91% |
-| XGBoost | 0.9999 | 99.81% | 99.97% | 99.83% | 99.90% |
-| **Ensemble** | **0.9999** | **99.81%** | **99.97%** | **99.84%** | **99.90%** |
+| CatBoost | 0.6760 | 94.22% | 97.82% | 96.19% | 96.99% |
+| LightGBM | 0.6818 | 94.81% | 97.90% | 96.72% | 97.31% |
+| XGBoost | 0.6950 | 94.46% | 97.90% | 96.36% | 97.12% |
+| **Ensemble** | **0.6942** | **95.85%** | **97.89%** | **97.83%** | **97.86%** |
 
-**Confusion Matrix**: TN=587, FP=6, FN=31, TP=19,265
+> **Note**: Previous versions reported AUC 0.9999 due to data leakage (3 features directly derived from the target). After removing `customer_success_rate`, `region_success_rate`, and `category_success_rate`, the corrected AUC is **0.6942** — an honest metric that reflects real-world prediction difficulty. With Algerian COD data (30-50% failure rate), the AUC is expected to be significantly higher due to stronger predictive signals.
+
+**Confusion Matrix**: TN=186, FP=407, FN=418, TP=18,878
 
 ### Customer Segmentation (HDBSCAN)
 
@@ -164,12 +166,19 @@ Trained on 99,441 orders (80/20 split). 17 engineered features.
 | Lost | 441 | 0.5% | 701 days | 1.0 | 6,515 |
 | Loyal | 252 | 0.3% | 247 days | 3.4 | 14,429 |
 
-### Demand Forecasting (Prophet)
+### Demand Forecasting (Amazon Chronos — pre-trained transformer)
 
-| Metric | Prophet | Baseline (Moving Avg) | Improvement |
-|--------|---------|-----------------------|-------------|
-| MAE | 173,954 DZD | 301,401 DZD | **-42.3%** |
-| RMSE | 230,140 DZD | 371,511 DZD | **-38.0%** |
+Benchmarked 8 models (Naive, Seasonal Naive, MA7, MA30, Holt-Winters, SARIMAX, Prophet, Chronos) with proper out-of-sample evaluation:
+
+| Horizon | Best Model | MAE (DZD) | vs MA7 Baseline |
+|---------|-----------|-----------|---------|
+| 14-day | **Chronos-T5-Small** | 510,260 | **+12.5%** |
+| 30-day | Seasonal Naive | 327,196 | +9.9% |
+| 60-day | Prophet | 265,663 | +11.9% |
+
+Chronos achieves the **lowest RMSE** (400,257) and **lowest MAPE** (135.5%) at the default 30-day horizon, meaning its predictions are the most stable and proportionally accurate.
+
+> **Note**: The previous Prophet evaluation inflated improvement to 42.3% by evaluating on training data (in-sample). Properly evaluated (out-of-sample), Prophet achieves 11.9% improvement at 60-day but performs worse than baselines at 30-day.
 
 ---
 

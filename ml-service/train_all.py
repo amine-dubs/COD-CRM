@@ -108,7 +108,7 @@ def load_and_prepare_data() -> pd.DataFrame:
     df = df.sort_values("order_date")
     cust_stats = df.groupby("customer_unique_id").agg(
         customer_order_count=("order_id", "count"),
-        customer_success_rate=("is_delivered", "mean"),
+        customer_total_spent=("total_amount", "sum"),
     ).reset_index()
     df = df.merge(cust_stats, on="customer_unique_id", how="left")
     df["is_repeat_customer"] = (df["customer_order_count"] > 1).astype(int)
@@ -474,7 +474,7 @@ def train_forecasting(df: pd.DataFrame):
         logger.info(f"  Saved time series for category: {cat}")
 
     # ── Evaluate Chronos vs baseline ──────────────────────────
-    test_days = 60
+    test_days = 30
     try:
         import torch
         from chronos import ChronosPipeline
