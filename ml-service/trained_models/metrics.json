@@ -1,5 +1,5 @@
 {
-  "trained_at": "2026-03-01T01:23:40.400626",
+  "trained_at": "2026-03-01T05:34:56.370230",
   "dataset": "olist_brazilian_ecommerce",
   "total_orders": 99441,
   "delivery_rate": 0.9702,
@@ -120,16 +120,16 @@
       "health_beauty",
       "sports_leisure"
     ],
-    "method": "prophet",
-    "prophet": {
-      "mae": 173953.8629450478,
-      "rmse": 230140.2131284282
+    "method": "chronos-t5-small",
+    "chronos": {
+      "mae": 348483.96,
+      "rmse": 402490.55
     },
     "baseline_moving_avg": {
-      "mae": 301400.5628571428,
-      "rmse": 371510.89085390634
+      "mae": 301400.56,
+      "rmse": 371510.89
     },
-    "improvement_mae_pct": 42.3,
+    "improvement_mae_pct": -15.6,
     "time_series_days": 714,
     "test_days": 60
   }

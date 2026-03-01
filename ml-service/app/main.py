@@ -1,3 +1,8 @@
+import os
+
+# Prevent OpenMP duplicate library crash on Windows/Anaconda
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 

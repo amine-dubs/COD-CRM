@@ -15,8 +15,8 @@ joblib==1.4.2
 # Clustering - SOTA
 hdbscan==0.8.39
 
-# Time series forecasting - SOTA
-neuralprophet==0.9.0
+# Time series forecasting - SOTA (pre-trained transformer)
+chronos-forecasting>=1.4.0
 
 # LLM Integration
 google-genai>=1.0.0

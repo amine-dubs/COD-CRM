@@ -4,7 +4,7 @@ train_all.py — State-of-the-Art Model Training Pipeline
 Trains all three AI models for the COD-CRM:
 1. Order Risk Scoring: CatBoost + LightGBM + XGBoost ensemble
 2. Customer Segmentation: HDBSCAN + KMeans hybrid
-3. Demand Forecasting: NeuralProphet
+3. Demand Forecasting: Amazon Chronos (pre-trained transformer)
 
 Usage:
     cd ml-service
@@ -412,13 +412,21 @@ def train_segmentation(df: pd.DataFrame):
 
 
 # ═══════════════════════════════════════════════════════════════
-# STEP 4: DEMAND FORECASTING — Prophet
+# STEP 4: DEMAND FORECASTING — Chronos (Pre-trained Transformer)
 # ═══════════════════════════════════════════════════════════════
 
+CHRONOS_MODEL_NAME = "amazon/chronos-t5-small"
+
+
 def train_forecasting(df: pd.DataFrame):
-    """Train demand forecasting with Prophet (fallback to simple stats)."""
+    """Prepare time series data for Chronos demand forecasting.
+
+    Chronos is a pre-trained foundation model for time series — it does not
+    need per-dataset training.  We prepare and save the historical time series
+    per category, then optionally evaluate Chronos accuracy vs a baseline.
+    """
     logger.info("=" * 60)
-    logger.info("STEP 4: DEMAND FORECASTING")
+    logger.info("STEP 4: DEMAND FORECASTING — Chronos")
     logger.info("=" * 60)
 
     delivered = df[df["is_delivered"] == 1].copy()
@@ -437,93 +445,91 @@ def train_forecasting(df: pd.DataFrame):
 
     logger.info(f"Time series: {len(daily)} days, avg daily revenue: {daily['y'].mean():,.0f} DZD")
 
-    models = {}
-    forecast_metrics = {"models_trained": [], "method": "prophet"}
+    # ── Save time series data per category ────────────────────
+    time_series_data = {}
+    forecast_metrics = {"models_trained": [], "method": "chronos-t5-small"}
 
+    # Overall time series
+    time_series_data["all"] = {
+        "dates": daily["ds"].dt.strftime("%Y-%m-%d").tolist(),
+        "values": daily["y"].tolist(),
+    }
+    forecast_metrics["models_trained"].append("all")
+    logger.info("Saved overall time series (%d days)", len(daily))
+
+    # Top 3 categories
+    top_cats = delivered["product_category"].value_counts().head(3).index.tolist()
+    for cat in top_cats:
+        cat_df = delivered[delivered["product_category"] == cat]
+        cat_daily = cat_df.groupby("ds").agg(y=("total_amount", "sum")).reset_index()
+        cat_daily["ds"] = pd.to_datetime(cat_daily["ds"])
+        cat_daily = cat_daily.set_index("ds").reindex(full_range, fill_value=0).reset_index()
+        cat_daily.columns = ["ds", "y"]
+
+        time_series_data[cat] = {
+            "dates": cat_daily["ds"].dt.strftime("%Y-%m-%d").tolist(),
+            "values": cat_daily["y"].tolist(),
+        }
+        forecast_metrics["models_trained"].append(cat)
+        logger.info(f"  Saved time series for category: {cat}")
+
+    # ── Evaluate Chronos vs baseline ──────────────────────────
+    test_days = 60
     try:
-        from prophet import Prophet
+        import torch
+        from chronos import ChronosPipeline
 
-        logger.info("Training Prophet (overall)...")
-        prophet_model = Prophet(
-            yearly_seasonality=True,
-            weekly_seasonality=True,
-            daily_seasonality=False,
-            changepoint_prior_scale=0.05,
-            seasonality_prior_scale=10.0,
-            seasonality_mode="multiplicative",
+        logger.info("Loading Chronos model (%s) for evaluation...", CHRONOS_MODEL_NAME)
+        pipeline = ChronosPipeline.from_pretrained(
+            CHRONOS_MODEL_NAME,
+            device_map="cpu",
+            torch_dtype=torch.float32,
         )
-        prophet_model.fit(daily[["ds", "y"]])
-        models["all"] = prophet_model
 
-        # Evaluate on last 60 days
-        test_days = 60
-        train_series = daily.iloc[:-test_days]
-        test_series = daily.iloc[-test_days:]
+        train_values = daily["y"].values[:-test_days]
+        test_actual = daily["y"].values[-test_days:]
 
-        future = prophet_model.make_future_dataframe(periods=0)
-        forecast = prophet_model.predict(future)
-        test_forecast = forecast.iloc[-test_days:]
-        test_actual = test_series["y"].values
-        test_pred = test_forecast["yhat"].values
+        context = torch.tensor(train_values, dtype=torch.float32).unsqueeze(0)
+        forecast_tensor = pipeline.predict(
+            context, prediction_length=test_days, num_samples=20
+        )
+        test_pred = torch.median(forecast_tensor.float(), dim=1).values.squeeze(0).numpy()
 
-        prophet_mae = float(np.abs(test_actual - test_pred).mean())
-        prophet_rmse = float(np.sqrt(((test_actual - test_pred) ** 2).mean()))
+        chronos_mae = float(np.abs(test_actual - test_pred).mean())
+        chronos_rmse = float(np.sqrt(((test_actual - test_pred) ** 2).mean()))
 
-        # Baseline: moving average 7 days
+        # Baseline: 7-day moving average
         ma7_pred = np.full(test_days, daily["y"].iloc[-(test_days + 7):-test_days].mean())
         ma_mae = float(np.abs(test_actual - ma7_pred).mean())
         ma_rmse = float(np.sqrt(((test_actual - ma7_pred) ** 2).mean()))
 
+        improvement = round((1 - chronos_mae / ma_mae) * 100, 1) if ma_mae > 0 else 0
+
         forecast_metrics.update({
-            "prophet": {"mae": prophet_mae, "rmse": prophet_rmse},
-            "baseline_moving_avg": {"mae": ma_mae, "rmse": ma_rmse},
-            "improvement_mae_pct": round((1 - prophet_mae / ma_mae) * 100, 1) if ma_mae > 0 else 0,
+            "chronos": {"mae": round(chronos_mae, 2), "rmse": round(chronos_rmse, 2)},
+            "baseline_moving_avg": {"mae": round(ma_mae, 2), "rmse": round(ma_rmse, 2)},
+            "improvement_mae_pct": improvement,
             "time_series_days": int(len(daily)),
             "test_days": test_days,
         })
 
-        logger.info(f"  Prophet MAE: {prophet_mae:,.0f} DZD | Baseline MAE: {ma_mae:,.0f} DZD")
-
-        # Top 3 categories
-        top_cats = delivered["product_category"].value_counts().head(3).index.tolist()
-        forecast_metrics["models_trained"].append("all")
-        for cat in top_cats:
-            logger.info(f"Training Prophet for: {cat}...")
-            cat_df = delivered[delivered["product_category"] == cat]
-            cat_daily = cat_df.groupby("ds").agg(y=("total_amount", "sum")).reset_index()
-            cat_daily["ds"] = pd.to_datetime(cat_daily["ds"])
-            cat_daily = cat_daily.set_index("ds").reindex(full_range, fill_value=0).reset_index()
-            cat_daily.columns = ["ds", "y"]
-
-            cat_model = Prophet(
-                yearly_seasonality=True,
-                weekly_seasonality=True,
-                daily_seasonality=False,
-                changepoint_prior_scale=0.05,
-                seasonality_mode="multiplicative",
-            )
-            cat_model.fit(cat_daily)
-            models[cat] = cat_model
-            forecast_metrics["models_trained"].append(cat)
-            logger.info(f"  {cat} model trained!")
-
-        logger.info(f"Prophet models trained for: {list(models.keys())}")
+        logger.info(f"  Chronos MAE: {chronos_mae:,.0f} DZD | Baseline MAE: {ma_mae:,.0f} DZD")
+        logger.info(f"  Improvement over baseline: {improvement:.1f}%")
 
     except ImportError:
-        logger.warning("Prophet not available. Using statistical fallback.")
-        forecast_metrics["method"] = "moving_average"
+        logger.warning(
+            "chronos-forecasting or torch not installed — skipping evaluation. "
+            "Install with: pip install chronos-forecasting"
+        )
+        forecast_metrics["evaluation"] = "skipped (chronos not installed)"
+        forecast_metrics["time_series_days"] = int(len(daily))
+    except Exception as e:
+        logger.warning("Chronos evaluation failed: %s", e)
+        forecast_metrics["evaluation"] = f"skipped ({e})"
+        forecast_metrics["time_series_days"] = int(len(daily))
 
-        models["all"] = {
-            "method": "moving_average",
-            "ma7": float(daily["y"].tail(7).mean()),
-            "ma30": float(daily["y"].tail(30).mean()),
-            "last_date": str(daily["ds"].max()),
-        }
-        forecast_metrics["models_trained"].append("all")
-        logger.info(f"  Fallback MA7={models['all']['ma7']:,.0f}, MA30={models['all']['ma30']:,.0f}")
-
-    joblib.dump(models, MODEL_DIR / "forecaster_models.joblib")
-    logger.info(f"Saved forecasting models to {MODEL_DIR}")
+    joblib.dump(time_series_data, MODEL_DIR / "forecaster_models.joblib")
+    logger.info(f"Saved time series data to {MODEL_DIR / 'forecaster_models.joblib'}")
     return forecast_metrics
 
 
