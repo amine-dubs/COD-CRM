@@ -48,7 +48,7 @@ class LLMService:
         try:
             import google.generativeai as genai
             genai.configure(api_key=settings.GEMINI_API_KEY)
-            self.model = genai.GenerativeModel("gemini-2.0-flash")
+            self.model = genai.GenerativeModel("gemini-2.5-flash")
             self._initialized = True
             logger.info("Gemini LLM service initialized successfully")
         except Exception as e:
