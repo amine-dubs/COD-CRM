@@ -1,0 +1,136 @@
+{
+  "trained_at": "2026-03-01T01:23:40.400626",
+  "dataset": "olist_brazilian_ecommerce",
+  "total_orders": 99441,
+  "delivery_rate": 0.9702,
+  "risk_prediction": {
+    "models": {
+      "catboost": {
+        "auc_roc": 0.9999642561503891,
+        "accuracy": 0.9982402332947861,
+        "precision": 0.9998961847910719,
+        "recall": 0.9982898009950248,
+        "f1_score": 0.9990923471901663
+      },
+      "lightgbm": {
+        "auc_roc": 0.9999524580582193,
+        "accuracy": 0.9983407913922269,
+        "precision": 0.9990673091870045,
+        "recall": 0.9992226368159204,
+        "f1_score": 0.9991449669646327
+      },
+      "xgboost": {
+        "auc_roc": 0.9999576142614639,
+        "accuracy": 0.9981396751973453,
+        "precision": 0.9997405158544813,
+        "recall": 0.9983416252072969,
+        "f1_score": 0.999040580837547
+      },
+      "ensemble": {
+        "auc_roc": 0.999953419384248,
+        "accuracy": 0.9981396751973453,
+        "precision": 0.9996886513413938,
+        "recall": 0.9983934494195689,
+        "f1_score": 0.9990406305909197
+      }
+    },
+    "ensemble_weights": {
+      "catboost": 0.3333353823059541,
+      "lightgbm": 0.3333314494438146,
+      "xgboost": 0.3333331682502311
+    },
+    "confusion_matrix": {
+      "tn": 587,
+      "fp": 6,
+      "fn": 31,
+      "tp": 19265
+    },
+    "dataset": {
+      "total_samples": 99441,
+      "train_samples": 79552,
+      "test_samples": 19889,
+      "positive_rate": 0.9702034372140264
+    },
+    "features": [
+      "hour_of_day",
+      "day_of_week",
+      "month",
+      "is_weekend",
+      "order_value",
+      "shipping_cost",
+      "discount",
+      "subtotal",
+      "n_items",
+      "has_alt_phone",
+      "is_repeat_customer",
+      "customer_order_count",
+      "customer_success_rate",
+      "region_success_rate",
+      "category_success_rate",
+      "estimated_delivery_days",
+      "avg_product_weight"
+    ]
+  },
+  "segmentation": {
+    "algorithm": "HDBSCAN",
+    "n_clusters": 5,
+    "total_customers": 96096,
+    "segments": {
+      "Segment 4": {
+        "count": 88994,
+        "percentage": 92.6,
+        "avg_recency": 286.2,
+        "avg_frequency": 1.0,
+        "avg_monetary": 3459.49
+      },
+      "At Risk": {
+        "count": 2736,
+        "percentage": 2.8,
+        "avg_recency": 271.0,
+        "avg_frequency": 2.0,
+        "avg_monetary": 7681.99
+      },
+      "Lost": {
+        "count": 441,
+        "percentage": 0.5,
+        "avg_recency": 700.6,
+        "avg_frequency": 1.0,
+        "avg_monetary": 6515.23
+      },
+      "VIP": {
+        "count": 3673,
+        "percentage": 3.8,
+        "avg_recency": 316.2,
+        "avg_frequency": 1.0,
+        "avg_monetary": 26364.9
+      },
+      "Loyal": {
+        "count": 252,
+        "percentage": 0.3,
+        "avg_recency": 246.5,
+        "avg_frequency": 3.38,
+        "avg_monetary": 14428.64
+      }
+    }
+  },
+  "forecasting": {
+    "models_trained": [
+      "all",
+      "bed_bath_table",
+      "health_beauty",
+      "sports_leisure"
+    ],
+    "method": "prophet",
+    "prophet": {
+      "mae": 173953.8629450478,
+      "rmse": 230140.2131284282
+    },
+    "baseline_moving_avg": {
+      "mae": 301400.5628571428,
+      "rmse": 371510.89085390634
+    },
+    "improvement_mae_pct": 42.3,
+    "time_series_days": 714,
+    "test_days": 60
+  }
+}
