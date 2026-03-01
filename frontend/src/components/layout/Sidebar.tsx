@@ -9,6 +9,7 @@ import {
   Users,
   TrendingUp,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 import { useHealth } from "@/hooks/useHealth";
 
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { href: "/risk", label: "Risk", icon: Shield },
   { href: "/segments", label: "Segments", icon: Users },
   { href: "/forecast", label: "Forecast", icon: TrendingUp },
+  { href: "/insights", label: "AI Insights", icon: Sparkles },
   { href: "/retrain", label: "Retrain", icon: RefreshCw },
 ];
 

@@ -132,6 +132,27 @@ export interface TrainingMetrics {
   forecasting: ForecastingMetrics;
 }
 
+// === LLM Insights (Gemini) ===
+export interface InsightsSummary {
+  summary: string;
+  lang: string;
+  period?: string;
+  generated: boolean;
+}
+
+export interface RiskExplanation {
+  explanation: string;
+  score?: number;
+  lang?: string;
+  generated: boolean;
+}
+
+export interface RecommendationsResult {
+  recommendations: string;
+  lang: string;
+  generated: boolean;
+}
+
 // === Retraining ===
 export interface DataFormatInfo {
   required_columns: Record<string, string>;

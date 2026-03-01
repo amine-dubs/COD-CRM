@@ -8,6 +8,9 @@ import type {
   TrainingMetrics,
   DataFormatInfo,
   RetrainingResult,
+  InsightsSummary,
+  RiskExplanation,
+  RecommendationsResult,
 } from "./types";
 
 const ML_BASE_URL =
@@ -69,5 +72,21 @@ export const api = {
     fetchApi<ApiResponse<{ models_reloaded: boolean }>>(
       "/api/retrain/restore-defaults",
       { method: "POST" }
+    ),
+
+  // === LLM Insights (Gemini) ===
+  getInsightsSummary: (lang: string = "en", period: string = "week") =>
+    fetchApi<ApiResponse<InsightsSummary>>(
+      `/api/insights/summary?lang=${lang}&period=${period}`
+    ),
+
+  explainOrderRisk: (score: number, reasons: string[], lang: string = "en") =>
+    fetchApi<ApiResponse<RiskExplanation>>(
+      `/api/insights/order-explanation?score=${score}&reasons=${encodeURIComponent(reasons.join(","))}&lang=${lang}`
+    ),
+
+  getRecommendations: (context: string, lang: string = "en") =>
+    fetchApi<ApiResponse<RecommendationsResult>>(
+      `/api/insights/recommendations?context=${encodeURIComponent(context)}&lang=${lang}`
     ),
 };
