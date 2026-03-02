@@ -236,14 +236,19 @@ def _prepare_custom_data(df: pd.DataFrame) -> pd.DataFrame:
         df["is_delivered"] = 1
 
     # Payment / total amount
+    has_subtotal = "subtotal" in df.columns
     for col in ["payment_value", "total_amount", "amount", "price", "total"]:
         if col in df.columns:
             df["total_amount"] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-            df["subtotal"] = df["total_amount"]
+            if not has_subtotal:
+                df["subtotal"] = df["total_amount"]
+            else:
+                df["subtotal"] = pd.to_numeric(df["subtotal"], errors="coerce").fillna(df["total_amount"])
             break
     else:
         df["total_amount"] = 0
-        df["subtotal"] = 0
+        if not has_subtotal:
+            df["subtotal"] = 0
 
     # Customer
     for col in ["customer_unique_id", "customer_id", "client_id", "phone"]:

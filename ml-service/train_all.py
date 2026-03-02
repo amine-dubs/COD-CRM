@@ -174,7 +174,55 @@ def load_and_prepare_data() -> pd.DataFrame:
 # STEP 2: ORDER RISK MODEL — Optimized Ensemble
 # ═══════════════════════════════════════════════════════════════
 
-def train_risk_ensemble(df: pd.DataFrame):
+def _optuna_tune_lgbm(X_train, y_train, X_test, y_test, n_trials=40):
+    """Auto-tune LightGBM hyperparameters using Optuna.
+
+    Runs Bayesian optimization to find the best parameters for the
+    current dataset. Used automatically during retraining so models
+    are always optimized for the company's actual data.
+    """
+    try:
+        import optuna
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+    except ImportError:
+        logger.warning("Optuna not installed — using default LightGBM parameters")
+        return None
+
+    from sklearn.metrics import roc_auc_score
+    from lightgbm import LGBMClassifier
+
+    def objective(trial):
+        params = {
+            "n_estimators": trial.suggest_int("n_estimators", 200, 1500),
+            "max_depth": trial.suggest_int("max_depth", 3, 12),
+            "learning_rate": trial.suggest_float("learning_rate", 0.01, 0.2, log=True),
+            "num_leaves": trial.suggest_int("num_leaves", 15, 127),
+            "subsample": trial.suggest_float("subsample", 0.5, 1.0),
+            "colsample_bytree": trial.suggest_float("colsample_bytree", 0.4, 1.0),
+            "min_child_samples": trial.suggest_int("min_child_samples", 5, 100),
+            "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 10.0, log=True),
+            "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 10.0, log=True),
+            "random_state": 42,
+            "verbose": -1,
+        }
+        model = LGBMClassifier(**params)
+        model.fit(X_train, y_train)
+        proba = model.predict_proba(X_test)[:, 1]
+        return roc_auc_score(y_test, proba)
+
+    study = optuna.create_study(
+        direction="maximize",
+        sampler=optuna.samplers.TPESampler(seed=42),
+    )
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+
+    best = study.best_params
+    logger.info(f"Optuna tuning complete ({n_trials} trials): AUC={study.best_value:.4f}")
+    logger.info(f"  Best params: {best}")
+    return best
+
+
+def train_risk_ensemble(df: pd.DataFrame, auto_tune: bool = True):
     """Train optimized ensemble for order delivery risk prediction.
 
     Optimizations (from optimize_risk.py benchmark):
@@ -248,10 +296,10 @@ def train_risk_ensemble(df: pd.DataFrame):
     # ── CatBoost ──
     logger.info("Training CatBoost...")
     cb_model = CatBoostClassifier(
-        iterations=1200,
-        depth=10,
-        learning_rate=0.02,
-        l2_leaf_reg=0.5,
+        iterations=lgb_params.get("n_estimators", 1200),
+        depth=min(lgb_params.get("max_depth", 10), 10),
+        learning_rate=lgb_params.get("learning_rate", 0.02),
+        l2_leaf_reg=lgb_params.get("reg_lambda", 0.5),
         eval_metric="AUC",
         random_seed=42,
         verbose=0,
@@ -262,20 +310,31 @@ def train_risk_ensemble(df: pd.DataFrame):
     logger.info(f"  CatBoost AUC-ROC: {cb_auc:.4f}")
 
     # ── LightGBM (Optuna-tuned) ──
-    logger.info("Training LightGBM (Optuna-tuned)...")
-    lgb_model = LGBMClassifier(
-        n_estimators=1289,
-        max_depth=12,
-        learning_rate=0.018,
-        num_leaves=99,
-        subsample=0.515,
-        colsample_bytree=0.423,
-        min_child_samples=100,
-        reg_alpha=2.07e-08,
-        reg_lambda=3.80e-07,
-        random_state=42,
-        verbose=-1,
-    )
+    if auto_tune:
+        logger.info("Running Optuna hyperparameter optimization (40 trials)...")
+        tuned_params = _optuna_tune_lgbm(X_train, y_train, X_test, y_test, n_trials=40)
+    else:
+        tuned_params = None
+
+    # Fallback: pre-tuned params from Olist optimization (optimize_risk.py)
+    lgb_params = {
+        "n_estimators": 1289,
+        "max_depth": 12,
+        "learning_rate": 0.018,
+        "num_leaves": 99,
+        "subsample": 0.515,
+        "colsample_bytree": 0.423,
+        "min_child_samples": 100,
+        "reg_alpha": 2.07e-08,
+        "reg_lambda": 3.80e-07,
+        "random_state": 42,
+        "verbose": -1,
+    }
+    if tuned_params:
+        lgb_params = {**tuned_params, "random_state": 42, "verbose": -1}
+
+    logger.info("Training LightGBM%s...", " (Optuna-tuned)" if tuned_params else " (default params)")
+    lgb_model = LGBMClassifier(**lgb_params)
     lgb_model.fit(
         X_train, y_train,
         eval_set=[(X_test, y_test)],
@@ -288,13 +347,13 @@ def train_risk_ensemble(df: pd.DataFrame):
     # ── XGBoost ──
     logger.info("Training XGBoost...")
     xgb_model = XGBClassifier(
-        n_estimators=1200,
-        max_depth=10,
-        learning_rate=0.02,
-        subsample=0.6,
-        colsample_bytree=0.5,
-        reg_alpha=1e-06,
-        reg_lambda=1e-06,
+        n_estimators=lgb_params.get("n_estimators", 1200),
+        max_depth=lgb_params.get("max_depth", 10),
+        learning_rate=lgb_params.get("learning_rate", 0.02),
+        subsample=lgb_params.get("subsample", 0.6),
+        colsample_bytree=lgb_params.get("colsample_bytree", 0.5),
+        reg_alpha=lgb_params.get("reg_alpha", 1e-06),
+        reg_lambda=lgb_params.get("reg_lambda", 1e-06),
         eval_metric="auc",
         random_state=42,
         use_label_encoder=False,
@@ -416,8 +475,9 @@ def train_risk_ensemble(df: pd.DataFrame):
         "optimizations": {
             "target": "clean (delivered vs canceled/unavailable)",
             "resampling": "ADASYN ratio=0.3",
-            "hyperparameters": "Optuna-tuned (80 trials)",
+            "hyperparameters": "Optuna-tuned (auto)" if tuned_params else "Optuna-tuned (pre-computed)",
             "n_features": len(feature_names),
+            "lgbm_params": {k: v for k, v in lgb_params.items() if k not in ("random_state", "verbose")},
         },
     }
 

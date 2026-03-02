@@ -459,13 +459,18 @@ GET & \texttt{/api/forecast/demand} & Pr\'{e}vision de la demande \\
 GET & \texttt{/api/forecast/categories} & Cat\'{e}gories disponibles \\
 GET & \texttt{/api/insights/summary} & Insights g\'{e}n\'{e}r\'{e}s par LLM \\
 GET & \texttt{/api/insights/recommendations} & Recommandations IA \\
+\midrule
+POST & \texttt{/api/retrain/upload-and-train} & R\'{e}entra\^{i}ner via CSV \\
+POST & \texttt{/api/retrain/restore-defaults} & Restaurer les mod\`{e}les par d\'{e}faut \\
+GET & \texttt{/api/retrain/metrics} & M\'{e}triques d'\'{e}valuation \\
+GET & \texttt{/api/retrain/data-format} & Format CSV attendu \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
 \subsection{Int\'{e}gration avec le backend PHP}
 
-Le backend PHP communique avec le module ML via un service d\'{e}di\'{e} (\texttt{AIInsightsService}) qui encapsule les appels HTTP :
+Le backend PHP communique avec le module ML via un service d\'{e}di\'{e} (\texttt{AIInsightsService}) qui encapsule les appels HTTP. La fonctionnalit\'{e} cl\'{e} est le r\'{e}entra\^{i}nement depuis la base de donn\'{e}es, accessible via un seul clic depuis l'interface :
 
 \begin{lstlisting}[language=PHP, caption={Extrait du contr\^{o}leur PHP pour l'IA}]
 // AIInsightsController.php
@@ -481,6 +486,15 @@ public function orderRisk(Request $request, int $id): Response
     $risk = $this->aiService->getOrderRisk($enriched);
 
     return Response::success($risk);
+}
+
+// Reentrainement depuis la base de donnees
+public function retrainFromDatabase(Request $request): Response
+{
+    // 1. Extraire les commandes finalisees (avec jointures)
+    // 2. Generer un CSV temporaire
+    // 3. Envoyer au service ML pour reentrainement
+    // 4. Retourner les metriques des modeles optimises
 }
 \end{lstlisting}
 
@@ -570,7 +584,33 @@ Apr\`{e}s transformation, le jeu de donn\'{e}es contient \textbf{99~441 commande
 
 \section{R\'{e}entra\^{i}nement des mod\`{e}les}
 
-Le syst\`{e}me est con\c{c}u pour permettre \`{a} l'entreprise d'importer ses propres donn\'{e}es et de r\'{e}entra\^{i}ner les mod\`{e}les. Les mod\`{e}les entra\^{i}n\'{e}s sur les donn\'{e}es Olist servent de d\'{e}faut, tandis que l'API de r\'{e}entra\^{i}nement permet une mise \`{a} jour sans intervention technique :
+Le syst\`{e}me est con\c{c}u pour permettre \`{a} l'entreprise de r\'{e}entra\^{i}ner les mod\`{e}les sur ses propres donn\'{e}es, via deux m\'{e}thodes compl\'{e}mentaires. Les mod\`{e}les entra\^{i}n\'{e}s sur les donn\'{e}es Olist servent de d\'{e}faut.
+
+\subsubsection{R\'{e}entra\^{i}nement depuis la base de donn\'{e}es (m\'{e}thode principale)}
+
+La m\'{e}thode recommand\'{e}e pour les entreprises utilisant le CRM est le r\'{e}entra\^{i}nement direct depuis la base de donn\'{e}es. Le backend PHP extrait automatiquement les commandes finalis\'{e}es (livr\'{e}es, annul\'{e}es, retourn\'{e}es) avec leurs jointures (wilayas, articles, produits), g\'{e}n\`{e}re un CSV temporaire adapt\'{e} au format attendu par le module ML, puis l'envoie au service FastAPI pour entra\^{i}nement. L'entreprise n'a qu'\`{a} cliquer sur un bouton dans l'interface.
+
+\begin{lstlisting}[language=PHP, caption={Extraction automatique des donn\'{e}es depuis la base}]
+// AIInsightsController::retrainFromDatabase()
+$orders = $db->query("
+    SELECT o.status AS order_status,
+           o.created_at AS order_purchase_timestamp,
+           o.total_amount AS payment_value,
+           o.customer_phone AS customer_unique_id,
+           w.name AS customer_state, ...
+    FROM orders o
+    LEFT JOIN wilayas w ON o.wilaya_id = w.id
+    LEFT JOIN order_items oi ON o.id = oi.order_id
+    WHERE o.store_id = ? AND o.status IN ('delivered','cancelled','returned')
+    GROUP BY o.id", [$storeId]);
+// -> Generation CSV -> Upload vers le service ML
+\end{lstlisting}
+
+\subsubsection{Optimisation automatique des hyperparam\`{e}tres (Optuna)}
+
+Lors du r\'{e}entra\^{i}nement, le syst\`{e}me lance automatiquement une optimisation bay\'{e}sienne des hyperparam\`{e}tres via \textbf{Optuna} (40 essais). Les param\`{e}tres optimis\'{e}s de LightGBM (learning rate, profondeur, nombre de feuilles, r\'{e}gularisation L1/L2, etc.) sont \'{e}galement appliqu\'{e}s \`{a} CatBoost et XGBoost pour am\'{e}liorer l'ensemble. Cela garantit que les mod\`{e}les sont adapt\'{e}s aux sp\'{e}cificit\'{e}s des donn\'{e}es r\'{e}elles de l'entreprise, et non aux param\`{e}tres pr\'{e}-calcul\'{e}s sur Olist.
+
+\subsubsection{Endpoints de r\'{e}entra\^{i}nement}
 
 \begin{table}[H]
 \centering
@@ -580,7 +620,8 @@ Le syst\`{e}me est con\c{c}u pour permettre \`{a} l'entreprise d'importer ses pr
 \toprule
 \textbf{M\'{e}thode} & \textbf{Endpoint} & \textbf{Description} \\
 \midrule
-POST & \texttt{/api/retrain/upload-and-train} & Importer un CSV et r\'{e}entra\^{i}ner tous les mod\`{e}les \\
+POST & \texttt{/api/v1/ai/retrain} & R\'{e}entra\^{i}ner depuis la base de donn\'{e}es (backend PHP) \\
+POST & \texttt{/api/retrain/upload-and-train} & Importer un CSV et r\'{e}entra\^{i}ner (service ML direct) \\
 POST & \texttt{/api/retrain/restore-defaults} & Restaurer les mod\`{e}les par d\'{e}faut (sauvegard\'{e}s) \\
 GET & \texttt{/api/retrain/metrics} & Consulter les m\'{e}triques d'\'{e}valuation \\
 GET & \texttt{/api/retrain/data-format} & Obtenir le format CSV attendu \\
@@ -588,17 +629,20 @@ GET & \texttt{/api/retrain/data-format} & Obtenir le format CSV attendu \\
 \end{tabularx}
 \end{table}
 
-Le processus de r\'{e}entra\^{i}nement :
+\subsubsection{Processus de r\'{e}entra\^{i}nement}
+
 \begin{enumerate}
+  \item Extraction des commandes finalis\'{e}es depuis la base de donn\'{e}es (ou r\'{e}ception d'un CSV)
   \item Sauvegarde automatique des mod\`{e}les actuels dans un r\'{e}pertoire de backup
-  \item Validation et transformation du CSV import\'{e} (adaptation automatique des noms de colonnes)
-  \item Entra\^{i}nement des trois mod\`{e}les (risque, segmentation, pr\'{e}vision)
-  \item Sauvegarde des m\'{e}triques d'\'{e}valuation en JSON
+  \item Validation et transformation des donn\'{e}es (adaptation automatique des noms de colonnes)
+  \item \textbf{Optimisation automatique} des hyperparam\`{e}tres via Optuna (40 essais bay\'{e}siens)
+  \item Entra\^{i}nement des trois mod\`{e}les (risque, segmentation, pr\'{e}vision) avec param\`{e}tres optimis\'{e}s
+  \item Sauvegarde des m\'{e}triques d'\'{e}valuation et des param\`{e}tres optimaux en JSON
   \item Rechargement automatique des mod\`{e}les dans le service en cours d'ex\'{e}cution
   \item Possibilit\'{e} de restaurer les mod\`{e}les pr\'{e}c\'{e}dents en cas de r\'{e}gression
 \end{enumerate}
 
-Les m\'{e}triques d'\'{e}valuation (AUC-ROC, F1-Score, MAE, RMSE, matrice de confusion) sont persist\'{e}es dans un fichier \texttt{metrics.json} apr\`{e}s chaque entra\^{i}nement, permettant un suivi historique des performances.
+Les m\'{e}triques d'\'{e}valuation (AUC-ROC, F1-Score, MAE, RMSE, matrice de confusion) et les hyperparam\`{e}tres optimaux sont persist\'{e}s dans un fichier \texttt{metrics.json} apr\`{e}s chaque entra\^{i}nement, permettant un suivi historique des performances et la tra\c{c}abilit\'{e} des optimisations.
 
 
 % ══════════════════════════════════════════════════════════════

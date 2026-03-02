@@ -617,7 +617,7 @@ add_text_box(slide, Inches(0.7), Inches(0.5), Inches(10), Inches(0.8),
 add_accent_bar(slide)
 
 add_text_box(slide, Inches(0.7), Inches(1.8), Inches(11), Inches(0.4),
-             "FastAPI (Python) - 11 endpoints - Port 8001", font_size=15, color=MED_GRAY)
+             "FastAPI (Python) - 15 endpoints - Port 8001  |  PHP Backend - Port 8000", font_size=15, color=MED_GRAY)
 
 # Endpoint categories with icons
 categories = [
@@ -634,9 +634,10 @@ categories = [
         "GET  /api/forecast/demand",
         "GET  /api/forecast/categories",
     ]),
-    ("Insights LLM", ACCENT_ORANGE, [
-        "GET  /api/insights/summary",
-        "GET  /api/insights/recommendations",
+    ("Reentrainement", ACCENT_ORANGE, [
+        "POST /api/v1/ai/retrain (depuis BDD)",
+        "POST /api/retrain/upload-and-train",
+        "POST /api/retrain/restore-defaults",
     ]),
 ]
 
@@ -683,13 +684,14 @@ add_text_box(slide, Inches(0.7), Inches(2.1), Inches(5.6), Inches(0.4),
              "Pipeline de reentrainement", font_size=18, bold=True, color=ACCENT_GREEN)
 
 retrain_steps = [
-    "1. Upload du CSV via POST /api/retrain/upload-and-train",
-    "2. Backup automatique des modeles actuels",
-    "3. Validation et adaptation du format des colonnes",
-    "4. Entrainement des 3 modeles (risque, segments, prevision)",
-    "5. Sauvegarde des metriques dans metrics.json",
-    "6. Rechargement automatique dans le service",
-    "7. Rollback possible via /api/retrain/restore-defaults",
+    "1. Clic sur 'Reentrainer depuis la base de donnees'",
+    "2. Extraction automatique des commandes (PHP -> CSV)",
+    "3. Backup automatique des modeles actuels",
+    "4. Optimisation Optuna (40 essais bayesiens)",
+    "5. Entrainement des 3 modeles (params optimises)",
+    "6. Sauvegarde metriques + parametres optimaux",
+    "7. Rechargement automatique dans le service",
+    "8. Rollback possible via restore-defaults",
 ]
 add_bullet_slide_content(slide, retrain_steps, Inches(0.7), Inches(2.6), Inches(5.6), font_size=13, spacing=Pt(3))
 
@@ -712,13 +714,14 @@ add_bullet_slide_content(slide, saved_items, Inches(7.0), Inches(2.6), Inches(5.
 format_box = add_rounded_shape(slide, Inches(6.8), Inches(4.5), Inches(6.0), Inches(2.5), RGBColor(0x2C, 0x3E, 0x50))
 
 add_text_box(slide, Inches(7.0), Inches(4.6), Inches(5.6), Inches(0.3),
-             "Format CSV attendu (GET /api/retrain/data-format)", font_size=13, bold=True, color=ACCENT_BLUE)
+             "2 methodes de reentrainement", font_size=13, bold=True, color=ACCENT_BLUE)
 
 format_items = [
-    "Requis: order_status, order_purchase_timestamp,",
-    "        payment_value, customer_unique_id",
-    "Optionnel: customer_state, product_category_name,",
-    "          product_weight_g, order_estimated_delivery_date",
+    "Methode 1 (recommandee) : depuis la base de donnees",
+    "  -> POST /api/v1/ai/retrain (un clic, automatique)",
+    "Methode 2 : upload CSV personnalise",
+    "  -> POST /api/retrain/upload-and-train",
+    "Optuna auto-optimise les hyperparametres",
 ]
 add_bullet_slide_content(slide, format_items, Inches(7.0), Inches(5.0), Inches(5.6), font_size=11, color=LIGHT_GRAY, spacing=Pt(1))
 
@@ -744,7 +747,8 @@ contributions = [
     "Ensemble ML (CatBoost+LightGBM+XGBoost + ADASYN + Optuna) : AUC = 0.9961, Rappel(echecs) = 98%",
     "31 features enrichies (8 categories), cible propre",
     "Segmentation automatique : 5 profils clients (HDBSCAN)",
-    "Prevision LightGBM + Calendrier islamique : MAE 318K DZD (+12.2% vs baseline, 5 modeles)",
+    "Prevision LightGBM + Calendrier islamique : MAE 318K DZD (+12.2% vs baseline)",
+    "Reentrainement automatique depuis la BDD + Optuna auto-tuning",
     "Integration LLM (Gemini) multilingue AR/FR/EN",
 ]
 add_bullet_slide_content(slide, contributions, Inches(0.7), Inches(2.2), Inches(5.8), font_size=15, color=LIGHT_GRAY, spacing=Pt(4))
@@ -754,7 +758,7 @@ add_text_box(slide, Inches(7.0), Inches(1.7), Inches(5.5), Inches(0.4),
              "Perspectives", font_size=22, bold=True, color=ACCENT_ORANGE)
 
 perspectives = [
-    "Reentrainement sur donnees reelles algeriennes",
+    "Deploiement sur donnees reelles algeriennes (un clic)",
     "Impact reel des fetes islamiques (deja integrees)",
     "Apprentissage en ligne (mise a jour continue)",
     "A/B testing de l'impact des recommandations ML",

@@ -48,7 +48,7 @@ A production-ready, multi-tenant CRM SaaS platform for Algerian COD (Cash-on-Del
 - **Customer Segmentation** — HDBSCAN density-based clustering with RFM analysis (5 segments: VIP, Loyal, At Risk, Lost, Regular)
 - **Demand Forecasting** — LightGBM with 19 covariates including Islamic calendar events (Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid)
 - **AI Insights** — Google Gemini integration for multilingual business recommendations
-- **Model Retraining** — Upload your own CSV dataset, retrain all models, with automatic backup and rollback
+- **Model Retraining** — Retrain from your database with one click, or upload a custom CSV. Automatic Optuna hyperparameter optimization (40 Bayesian trials), backup and rollback
 
 ---
 
@@ -229,7 +229,7 @@ Foundation models like TimesFM, Chronos-Large, MOIRAI, and Lag-Llama are designe
 | Deliveries | `/api/v1/deliveries` (CRUD + status) | Role-based |
 | Returns | `/api/v1/returns` (CRUD + status) | Role-based |
 | Analytics | `/api/v1/analytics/dashboard`, `orders`, `wilayas`, `products`, `returns`, `revenue` | JWT |
-| AI Insights | `/api/v1/ai/order-risk/{id}`, `segments`, `forecast`, `insights`, `recommendations` | Owner/Admin |
+| AI Insights | `/api/v1/ai/order-risk/{id}`, `segments`, `forecast`, `insights`, `recommendations`, `retrain` | Owner/Admin |
 | Storefront | `/api/v1/storefront/{slug}`, `products`, `orders` | Public |
 | Super Admin | `/api/v1/admin/login`, `me`, `stats`, `stores`, `users` | Super Admin |
 
@@ -295,7 +295,23 @@ npm run dev                    # http://localhost:3000
 
 ## Retraining with Your Own Data
 
-The platform supports model retraining with your own dataset via the API:
+The platform supports two methods for model retraining:
+
+### Method 1: Retrain from Database (Recommended)
+
+For companies using the CRM, retraining is a one-click operation. The PHP backend automatically extracts finalized orders (delivered, cancelled, returned) with all relevant joins, generates a CSV matching the ML pipeline format, and sends it to the ML service. Optuna automatically optimizes hyperparameters for your data.
+
+```bash
+# Via the PHP backend (requires authentication)
+curl -X POST http://localhost:8000/api/v1/ai/retrain \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+Or simply click "Retrain from Database" in the AI dashboard interface.
+
+### Method 2: Upload Custom CSV
+
+For custom datasets not in the CRM database:
 
 ### 1. Check expected CSV format:
 ```bash
@@ -323,7 +339,7 @@ curl -X POST http://localhost:8001/api/retrain/upload-and-train \
 curl -X POST http://localhost:8001/api/retrain/restore-defaults
 ```
 
-Current models are automatically backed up before every retraining. Minimum 100 orders recommended.
+Current models are automatically backed up before every retraining. Minimum 100 orders recommended. During retraining, Optuna runs 40 Bayesian trials to optimize hyperparameters for your specific data.
 
 ---
 
