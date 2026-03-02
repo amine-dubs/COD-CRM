@@ -1,11 +1,12 @@
-"""LightGBM-based demand forecaster with Islamic calendar events.
+"""LightGBM-based demand forecaster with Algerian calendar events.
 
 Replaces the previous Chronos (zero-shot) approach with a trained LightGBM
 model that supports covariates:
   - Lag features (1, 7, 14, 28 days)
   - Rolling statistics (mean/std over 7, 14, 28 day windows)
-  - Calendar features (day-of-week, month, weekend, etc.)
-  - Islamic events (Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid)
+  - Calendar features (day-of-week, month, weekend/holiday, etc.)
+  - Islamic events (Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid, Islamic New Year)
+  - Algerian national holidays (New Year, Yennayer, Labour Day, Independence, Revolution)
 
 Selected after benchmarking 5 models (see benchmark_covariates.py):
   LightGBM MAE 318,741 DZD (+12.2% vs baseline, +5.8% vs Chronos)
@@ -23,12 +24,23 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# ── Islamic calendar events ──────────────────────────────────────
+# ── Algerian national holidays (fixed Gregorian dates) ──────────
+ALGERIAN_NATIONAL_HOLIDAYS = [
+    (1, 1),    # New Year's Day
+    (1, 12),   # Yennayer (Berber New Year)
+    (5, 1),    # Labour Day
+    (7, 5),    # Independence Day
+    (11, 1),   # Revolution Day
+]
+
+
+# ── Islamic & Algerian calendar events ──────────────────────────
 
 def get_islamic_events(start_year: int, end_year: int) -> list[dict]:
     """Compute dates for major Islamic events using hijri-converter.
 
     Events shift ~11 days earlier each Gregorian year.
+    Also includes fixed Algerian national holidays.
     """
     events = []
     try:
@@ -46,16 +58,16 @@ def get_islamic_events(start_year: int, end_year: int) -> list[dict]:
                         if d.year in range(start_year, end_year + 1):
                             events.append({"date": d, "event": "ramadan"})
 
-                    # Eid al-Fitr: month 10, days 1-3
+                    # Eid al-Fitr: month 10, days 1-3 (3 days)
                     eid_fitr = Hijri(hy, 10, 1).to_gregorian()
                     for d_off in range(3):
                         d = eid_fitr + pd.Timedelta(days=d_off)
                         if d.year in range(start_year, end_year + 1):
                             events.append({"date": d, "event": "eid_al_fitr"})
 
-                    # Eid al-Adha: month 12, days 10-13
+                    # Eid al-Adha: month 12, days 10-12 (3 days)
                     eid_adha = Hijri(hy, 12, 10).to_gregorian()
-                    for d_off in range(4):
+                    for d_off in range(3):
                         d = eid_adha + pd.Timedelta(days=d_off)
                         if d.year in range(start_year, end_year + 1):
                             events.append({"date": d, "event": "eid_al_adha"})
@@ -65,10 +77,24 @@ def get_islamic_events(start_year: int, end_year: int) -> list[dict]:
                     if mawlid.year in range(start_year, end_year + 1):
                         events.append({"date": mawlid, "event": "mawlid"})
 
+                    # Islamic New Year: 1 Muharram
+                    islamic_ny = Hijri(hy, 1, 1).to_gregorian()
+                    if islamic_ny.year in range(start_year, end_year + 1):
+                        events.append({"date": islamic_ny, "event": "islamic_new_year"})
+
                 except (ValueError, OverflowError):
                     continue
     except ImportError:
         logger.warning("hijri-converter not installed — Islamic events disabled")
+
+    # Add Algerian national holidays for each year
+    for greg_year in range(start_year, end_year + 1):
+        for month, day in ALGERIAN_NATIONAL_HOLIDAYS:
+            try:
+                d = pd.Timestamp(year=greg_year, month=month, day=day)
+                events.append({"date": d, "event": "algerian_holiday"})
+            except ValueError:
+                continue
 
     # Deduplicate
     seen = set()
@@ -83,13 +109,14 @@ def get_islamic_events(start_year: int, end_year: int) -> list[dict]:
 
 FEATURE_COLS = [
     "day_of_week", "month", "is_weekend", "day_of_month", "week_of_year",
-    "ramadan", "eid_al_fitr", "eid_al_adha", "mawlid",
+    "ramadan", "eid_al_fitr", "eid_al_adha", "mawlid", "islamic_new_year",
+    "algerian_holiday",
     "lag_1", "lag_7", "lag_14", "lag_28",
     "rolling_mean_7", "rolling_mean_14", "rolling_mean_28",
     "rolling_std_7", "rolling_std_14", "rolling_std_28",
 ]
 
-EVENT_TYPES = ["ramadan", "eid_al_fitr", "eid_al_adha", "mawlid"]
+EVENT_TYPES = ["ramadan", "eid_al_fitr", "eid_al_adha", "mawlid", "islamic_new_year", "algerian_holiday"]
 
 
 class DemandForecaster:
@@ -274,16 +301,33 @@ class DemandForecaster:
         event_dates_by_type: dict[str, set],
     ) -> dict:
         """Build feature dict for a single prediction date."""
+        # Check if date is an Algerian off-day (Fri-Sat weekend, national + Islamic holidays)
+        dt_norm = dt.normalize()
+        is_off = int(dt.dayofweek >= 4)  # Friday-Saturday
+        if not is_off:
+            md = (dt.month, dt.day)
+            if md in [(1, 1), (1, 12), (5, 1), (7, 5), (11, 1)]:
+                is_off = 1
+            elif dt_norm in event_dates_by_type.get("eid_al_fitr", set()):
+                is_off = 1
+            elif dt_norm in event_dates_by_type.get("eid_al_adha", set()):
+                is_off = 1
+            elif dt_norm in event_dates_by_type.get("mawlid", set()):
+                is_off = 1
+            elif dt_norm in event_dates_by_type.get("islamic_new_year", set()):
+                is_off = 1
+            elif dt_norm in event_dates_by_type.get("algerian_holiday", set()):
+                is_off = 1
+
         row = {
             "day_of_week": dt.dayofweek,
             "month": dt.month,
-            "is_weekend": int(dt.dayofweek >= 5),
+            "is_weekend": is_off,
             "day_of_month": dt.day,
             "week_of_year": int(dt.isocalendar()[1]),
         }
 
-        # Islamic events
-        dt_norm = dt.normalize()
+        # Islamic & Algerian event flags
         for etype in EVENT_TYPES:
             row[etype] = int(dt_norm in event_dates_by_type.get(etype, set()))
 

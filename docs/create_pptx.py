@@ -340,7 +340,7 @@ add_text_box(slide, Inches(0.7), Inches(2.0), Inches(11), Inches(0.4),
 
 # Feature categories
 feat_data = [
-    ("Temporelles", "6 features", "Heure, jour, mois, weekend, trimestre", ACCENT_BLUE),
+    ("Temporelles", "6 features", "Heure, jour, mois, jours feries/weekend, trimestre", ACCENT_BLUE),
     ("Valeur", "4 features", "Montant, sous-total, frais, ratio", ACCENT_GREEN),
     ("Client", "3 features", "Recurrence, nb commandes, panier moyen", ACCENT_ORANGE),
     ("Paiement", "6 features", "Boleto/COD, CB, debit, voucher, mensualites", ACCENT_PURPLE),
@@ -578,12 +578,13 @@ for i, (name, mae, rmse, mape, imp, bg) in enumerate(bench_rows):
 
 # LightGBM features (left)
 add_text_box(slide, Inches(0.7), Inches(4.6), Inches(5.5), Inches(0.4),
-             "LightGBM + Calendrier Islamique", font_size=18, bold=True, color=DARK_BLUE)
+             "LightGBM + Calendrier Algerien", font_size=18, bold=True, color=DARK_BLUE)
 
 config_items = [
-    "19 features : lags(1,7,14,28), rolling stats, calendrier",
-    "Covariables : Ramadan, Aid el-Fitr, Aid el-Adha, Mawlid",
-    "hijri-converter : calcul programmatique des dates",
+    "21 features : lags(1,7,14,28), rolling stats, calendrier",
+    "Islamiques : Ramadan, Aid el-Fitr, Aid el-Adha, Mawlid, Nouvel An",
+    "Nationaux : 1er jan, Yennayer, 1er mai, 5 juil, 1er nov",
+    "is_weekend = ven-sam + jours feries islamiques + nationaux",
     "Prevision recursive multi-step (pas de fuite)",
     "4 series : global + 3 categories produit",
 ]
@@ -596,7 +597,7 @@ add_text_box(slide, Inches(7.0), Inches(4.6), Inches(5.3), Inches(0.3),
              "Pourquoi LightGBM ?", font_size=14, bold=True, color=ACCENT_GREEN)
 insight_items = [
     "Meilleur MAE : 318 741 DZD (+12.2% vs baseline)",
-    "Supporte les covariables (calendrier islamique)",
+    "Supporte les covariables (calendrier algerien)",
     "Modeles fondamentaux (Chronos, TimesFM, MOIRAI)",
     "= zero-shot sans covariables -> inadaptes",
     "714 jours favorisent LightGBM vs deep learning",
@@ -747,7 +748,7 @@ contributions = [
     "Ensemble ML (CatBoost+LightGBM+XGBoost + ADASYN + Optuna) : AUC = 0.9961, Rappel(echecs) = 98%",
     "31 features enrichies (8 categories), cible propre",
     "Segmentation automatique : 5 profils clients (HDBSCAN)",
-    "Prevision LightGBM + Calendrier islamique : MAE 318K DZD (+12.2% vs baseline)",
+    "Prevision LightGBM + Calendrier algerien (islamique + national) : MAE 318K DZD (+12.2% vs baseline)",
     "Reentrainement automatique depuis la BDD + Optuna auto-tuning",
     "Integration LLM (Gemini) multilingue AR/FR/EN",
 ]
@@ -759,7 +760,7 @@ add_text_box(slide, Inches(7.0), Inches(1.7), Inches(5.5), Inches(0.4),
 
 perspectives = [
     "Deploiement sur donnees reelles algeriennes (un clic)",
-    "Impact reel des fetes islamiques (deja integrees)",
+    "Calendrier algerien complet integre (islamique + national)",
     "Apprentissage en ligne (mise a jour continue)",
     "A/B testing de l'impact des recommandations ML",
 ]

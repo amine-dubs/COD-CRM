@@ -1,6 +1,72 @@
 import pandas as pd
 import numpy as np
 from typing import Optional
+from functools import lru_cache
+
+
+# ── Algerian national holidays (fixed Gregorian dates) ──────────
+ALGERIAN_NATIONAL_HOLIDAYS = [
+    (1, 1),    # New Year's Day
+    (1, 12),   # Yennayer (Berber New Year)
+    (5, 1),    # Labour Day
+    (7, 5),    # Independence Day
+    (11, 1),   # Revolution Day
+]
+
+
+@lru_cache(maxsize=32)
+def _get_islamic_off_days(year: int) -> frozenset:
+    """Compute Islamic off-days (Eid al-Fitr 3d, Eid al-Adha 3d, Mawlid, Islamic New Year) for a Gregorian year."""
+    off_days = set()
+    try:
+        from hijri_converter import Hijri
+        hijri_year = year - 579
+        for hy in [hijri_year, hijri_year + 1]:
+            try:
+                # Eid al-Fitr: 1-3 Shawwal (3 days)
+                eid_fitr = Hijri(hy, 10, 1).to_gregorian()
+                for d_off in range(3):
+                    d = eid_fitr + pd.Timedelta(days=d_off)
+                    if d.year == year:
+                        off_days.add((d.month, d.day))
+
+                # Eid al-Adha: 10-12 Dhul Hijjah (3 days)
+                eid_adha = Hijri(hy, 12, 10).to_gregorian()
+                for d_off in range(3):
+                    d = eid_adha + pd.Timedelta(days=d_off)
+                    if d.year == year:
+                        off_days.add((d.month, d.day))
+
+                # Mawlid: 12 Rabi al-Awal
+                mawlid = Hijri(hy, 3, 12).to_gregorian()
+                if mawlid.year == year:
+                    off_days.add((mawlid.month, mawlid.day))
+
+                # Islamic New Year: 1 Muharram
+                islamic_ny = Hijri(hy, 1, 1).to_gregorian()
+                if islamic_ny.year == year:
+                    off_days.add((islamic_ny.month, islamic_ny.day))
+            except (ValueError, OverflowError):
+                continue
+    except ImportError:
+        pass
+    return frozenset(off_days)
+
+
+def is_algerian_off_day(dt) -> bool:
+    """Check if a date is an Algerian off-day (weekend, national holiday, or Islamic holiday)."""
+    dt = pd.Timestamp(dt)
+    # Friday-Saturday weekend (Algeria)
+    if dt.dayofweek >= 4:  # 4=Friday, 5=Saturday
+        return True
+    md = (dt.month, dt.day)
+    # National holidays
+    if md in ALGERIAN_NATIONAL_HOLIDAYS:
+        return True
+    # Islamic holidays
+    if md in _get_islamic_off_days(dt.year):
+        return True
+    return False
 
 
 class FeatureEngineer:
@@ -56,7 +122,7 @@ class FeatureEngineer:
             features["hour_of_day"] = dt.hour
             features["day_of_week"] = dt.dayofweek
             features["month"] = dt.month
-            features["is_weekend"] = int(dt.dayofweek >= 5)
+            features["is_weekend"] = int(is_algerian_off_day(dt))
             features["day_of_month"] = dt.day
             features["quarter"] = dt.quarter
         else:

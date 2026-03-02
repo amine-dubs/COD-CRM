@@ -616,7 +616,7 @@ def train_segmentation(df: pd.DataFrame):
 
 
 # ═══════════════════════════════════════════════════════════════
-# STEP 4: DEMAND FORECASTING — LightGBM with Islamic Calendar Events
+# STEP 4: DEMAND FORECASTING — LightGBM with Algerian Calendar Events
 # ═══════════════════════════════════════════════════════════════
 
 
@@ -626,16 +626,18 @@ def train_forecasting(df: pd.DataFrame):
     Selected after benchmarking 5 models (benchmark_covariates.py):
     LightGBM MAE 318,741 DZD (+12.2% vs MA7 baseline, +5.8% vs Chronos).
 
-    Features: lag(1,7,14,28), rolling stats, day-of-week, month, weekend,
-    Islamic events (Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid).
+    Features: lag(1,7,14,28), rolling stats, day-of-week, month, is_weekend
+    (Fri-Sat + national + Islamic holidays),
+    Islamic events (Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid, Islamic New Year),
+    Algerian national holidays (New Year, Yennayer, Labour Day, Independence, Revolution).
     Uses recursive multi-step forecasting for evaluation.
     """
     logger.info("=" * 60)
-    logger.info("STEP 4: DEMAND FORECASTING — LightGBM + Islamic Calendar")
+    logger.info("STEP 4: DEMAND FORECASTING — LightGBM + Algerian Calendar")
     logger.info("=" * 60)
 
     from lightgbm import LGBMRegressor
-    from app.models.forecaster import get_islamic_events, FEATURE_COLS, EVENT_TYPES
+    from app.models.forecaster import get_islamic_events, FEATURE_COLS, EVENT_TYPES, ALGERIAN_NATIONAL_HOLIDAYS
 
     delivered = df[df["is_delivered"] == 1].copy()
     delivered["ds"] = delivered["order_date"].dt.date
@@ -694,17 +696,28 @@ def train_forecasting(df: pd.DataFrame):
         # Calendar features
         ts_df["day_of_week"] = dt.dt.dayofweek
         ts_df["month"] = dt.dt.month
-        ts_df["is_weekend"] = (dt.dt.dayofweek >= 5).astype(int)
         ts_df["day_of_month"] = dt.dt.day
         ts_df["week_of_year"] = dt.dt.isocalendar().week.astype(int)
 
-        # Islamic events
+        # is_weekend: Algerian off-days (Fri-Sat weekend + national holidays + Islamic holidays)
+        is_off = (dt.dt.dayofweek >= 4).astype(int)  # Friday-Saturday
+        national_set = set(ALGERIAN_NATIONAL_HOLIDAYS)
+        md_series = list(zip(dt.dt.month, dt.dt.day))
+        national_mask = pd.Series([md in national_set for md in md_series], index=ts_df.index)
+        is_off = is_off | national_mask.astype(int)
+
+        # Islamic & Algerian calendar events
         for etype in EVENT_TYPES:
             event_dates = set(
                 pd.Timestamp(e["date"]).normalize()
                 for e in events if e["event"] == etype
             )
             ts_df[etype] = dt.dt.normalize().isin(event_dates).astype(int)
+            # Eid days, Mawlid, Islamic New Year are also off-days
+            if etype not in ("ramadan",):
+                is_off = is_off | ts_df[etype]
+
+        ts_df["is_weekend"] = is_off.clip(upper=1).astype(int)
 
         # Lag features
         for lag in [1, 7, 14, 28]:

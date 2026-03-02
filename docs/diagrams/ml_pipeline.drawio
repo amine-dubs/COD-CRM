@@ -39,7 +39,7 @@
         </mxCell>
 
         <!-- Feature Engineering -->
-        <mxCell id="p1_features" value="&lt;b&gt;Feature Engineering&lt;/b&gt;&lt;br&gt;17 features" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="p1_features" value="&lt;b&gt;Feature Engineering&lt;/b&gt;&lt;br&gt;31 features" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="90" y="405" width="160" height="45" as="geometry" />
         </mxCell>
         <mxCell id="e_p1_3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#6c8ebf;strokeWidth=2;" edge="1" source="p1_transform" target="p1_features" parent="1">
@@ -73,8 +73,8 @@
           <mxGeometry x="380" y="70" width="220" height="28" as="geometry" />
         </mxCell>
 
-        <mxCell id="p2a_split" value="&lt;b&gt;Train/Test Split&lt;/b&gt;&lt;br&gt;80/20, stratified" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="400" y="110" width="180" height="40" as="geometry" />
+        <mxCell id="p2a_split" value="&lt;b&gt;Train/Test Split&lt;/b&gt;&lt;br&gt;80/20, stratified&lt;br&gt;&lt;font size=&quot;1&quot;&gt;+ ADASYN resampling&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="400" y="110" width="180" height="45" as="geometry" />
         </mxCell>
 
         <mxCell id="p2a_cat" value="CatBoost &amp;rarr; AUC: 1.0" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
@@ -98,8 +98,8 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <mxCell id="p2a_ensemble" value="&lt;b&gt;Ensemble&lt;/b&gt;&lt;br&gt;Weighted Soft Voting" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
-          <mxGeometry x="400" y="318" width="180" height="40" as="geometry" />
+        <mxCell id="p2a_ensemble" value="&lt;b&gt;Ensemble&lt;/b&gt;&lt;br&gt;Weighted Soft Voting&lt;br&gt;&lt;font size=&quot;1&quot;&gt;Optuna-tuned (40 trials)&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="400" y="318" width="180" height="45" as="geometry" />
         </mxCell>
         <mxCell id="e_a4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#b85450;strokeWidth=1.5;" edge="1" source="p2a_xgb" target="p2a_ensemble" parent="1">
           <mxGeometry relative="1" as="geometry" />
@@ -165,7 +165,7 @@
           <mxGeometry x="940" y="110" width="180" height="40" as="geometry" />
         </mxCell>
 
-        <mxCell id="p2c_prophet" value="&lt;b&gt;Prophet Model&lt;/b&gt;&lt;br&gt;multiplicative seasonality" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="p2c_prophet" value="&lt;b&gt;LightGBM + Algerian Calendar&lt;/b&gt;&lt;br&gt;21 covariates" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="940" y="170" width="180" height="40" as="geometry" />
         </mxCell>
         <mxCell id="e_c1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#82b366;strokeWidth=1.5;" edge="1" source="p2c_agg" target="p2c_prophet" parent="1">
@@ -179,7 +179,7 @@
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
 
-        <mxCell id="p2c_mae" value="MAE: &lt;b&gt;265,663 DZD&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
+        <mxCell id="p2c_mae" value="MAE: &lt;b&gt;318,741 DZD&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;" vertex="1" parent="1">
           <mxGeometry x="940" y="282" width="180" height="32" as="geometry" />
         </mxCell>
         <mxCell id="e_c3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#82b366;strokeWidth=1.5;" edge="1" source="p2c_category" target="p2c_mae" parent="1">
@@ -198,7 +198,7 @@
           <mxGeometry x="1240" y="170" width="200" height="50" as="geometry" />
         </mxCell>
 
-        <mxCell id="p3_endpoints" value="&lt;b&gt;11 REST Endpoints&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;/predict, /segment, /forecast ...&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="p3_endpoints" value="&lt;b&gt;15 REST Endpoints&lt;/b&gt;&lt;br&gt;&lt;font size=&quot;1&quot;&gt;/predict, /segment, /forecast, /retrain ...&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="1240" y="260" width="200" height="50" as="geometry" />
         </mxCell>
         <mxCell id="e_p3_1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#82b366;strokeWidth=2;" edge="1" source="p3_fastapi" target="p3_endpoints" parent="1">

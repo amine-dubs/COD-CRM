@@ -46,7 +46,7 @@ A production-ready, multi-tenant CRM SaaS platform for Algerian COD (Cash-on-Del
 ### ML Module
 - **Order Risk Prediction** — Optimized ensemble (CatBoost + LightGBM + XGBoost + ADASYN + Optuna) with 31 features, AUC 0.9961, 98% failure recall
 - **Customer Segmentation** — HDBSCAN density-based clustering with RFM analysis (5 segments: VIP, Loyal, At Risk, Lost, Regular)
-- **Demand Forecasting** — LightGBM with 19 covariates including Islamic calendar events (Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid)
+- **Demand Forecasting** — LightGBM with 21 covariates including Algerian calendar events (Islamic: Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid, Islamic New Year; National: New Year, Yennayer, Labour Day, Independence Day, Revolution Day)
 - **AI Insights** — Google Gemini integration for multilingual business recommendations
 - **Model Retraining** — Retrain from your database with one click, or upload a custom CSV. Automatic Optuna hyperparameter optimization (40 Bayesian trials), backup and rollback
 
@@ -86,7 +86,7 @@ COD-CRM/
 │   │   ├── models/          # ML model implementations
 │   │   │   ├── predictor.py     # Risk prediction (ensemble)
 │   │   │   ├── segmenter.py     # Customer segmentation (HDBSCAN)
-│   │   │   ├── forecaster.py    # Demand forecasting (LightGBM + Islamic calendar)
+│   │   │   ├── forecaster.py    # Demand forecasting (LightGBM + Algerian calendar)
 │   │   │   └── features.py      # Feature engineering (31 features, 8 categories)
 │   │   ├── routes/          # API endpoints
 │   │   │   ├── predict.py       # POST /api/predict/order-risk
@@ -107,7 +107,7 @@ COD-CRM/
 │   │   ├── risk_ensemble.joblib      # CatBoost+LightGBM+XGBoost
 │   │   ├── segmenter.joblib         # HDBSCAN model
 │   │   ├── forecaster_models.joblib  # LightGBM forecasting (4 categories)
-│   │   ├── forecaster_lgbm.joblib   # LightGBM + Islamic calendar covariates
+│   │   ├── forecaster_lgbm.joblib   # LightGBM + Algerian calendar covariates
 │   │   ├── feature_engineer.joblib   # Feature pipeline
 │   │   ├── segmenter_scaler.joblib   # StandardScaler
 │   │   ├── segment_mapping.joblib    # Segment labels
@@ -173,7 +173,7 @@ Trained on 97,712 orders (clean target: delivered vs canceled/unavailable only).
 | Lost | 441 | 0.5% | 701 days | 1.0 | 6,515 |
 | Loyal | 252 | 0.3% | 247 days | 3.4 | 14,429 |
 
-### Demand Forecasting (LightGBM + Islamic Calendar)
+### Demand Forecasting (LightGBM + Algerian Calendar)
 
 Benchmarked 5 covariate-aware models. LightGBM selected for best MAE and native covariate support.
 
@@ -184,13 +184,13 @@ Benchmarked 5 covariate-aware models. LightGBM selected for best MAE and native 
 | Chronos-T5-Small (zero-shot) | 338,231 | 395,363 | +6.8% |
 | **LightGBM + lags + holidays** | **318,741** | **416,501** | **+12.2%** |
 
-**19 covariates**: Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid (via `hijri-converter`), day of week, month, weekend, lags (1/7/14/28), rolling statistics (mean/std at 7/14/28 days).
+**21 covariates**: Islamic events — Ramadan, Eid al-Fitr (3d), Eid al-Adha (3d), Mawlid, Islamic New Year (via `hijri-converter`); National holidays — New Year (Jan 1), Yennayer (Jan 12), Labour Day (May 1), Independence Day (Jul 5), Revolution Day (Nov 1); `is_weekend` = Fri-Sat + all holidays; day of week, month, lags (1/7/14/28), rolling statistics (mean/std at 7/14/28 days).
 
 ### Why Not Foundation Models (HuggingFace)?
 
-Foundation models like TimesFM, Chronos-Large, MOIRAI, and Lag-Llama are designed for **zero-shot forecasting** — they don't accept covariates. Our competitive advantage is **Islamic calendar-aware forecasting** for Algerian e-commerce, which requires a model that supports covariates. LightGBM is the right choice because:
+Foundation models like TimesFM, Chronos-Large, MOIRAI, and Lag-Llama are designed for **zero-shot forecasting** — they don't accept covariates. Our competitive advantage is **Algerian calendar-aware forecasting** (Islamic + national holidays) for Algerian e-commerce, which requires a model that supports covariates. LightGBM is the right choice because:
 
-- **Natively handles 19 covariates** (Islamic events + calendar + lags)
+- **Natively handles 21 covariates** (Islamic events + national holidays + calendar + lags)
 - **Fast to retrain** when new data arrives (seconds vs hours for transformers)
 - **Small dataset** (714 days) favors simpler models over deep learning
 - **TFT** (the only deep learning model with covariates) needs thousands of time series to outperform LightGBM
