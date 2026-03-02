@@ -102,7 +102,7 @@ export default function ForecastPage() {
           Demand Forecast
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          Prophet-based demand forecasting by product category
+          LightGBM demand forecasting with Islamic calendar covariates
         </p>
       </div>
 

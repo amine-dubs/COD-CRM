@@ -13,23 +13,36 @@ class OrderRiskRequest(BaseModel):
     order_id: Optional[int] = None
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
-    customer_phone_2: Optional[str] = None
     wilaya_id: Optional[int] = None
     customer_state: Optional[str] = None
     commune: Optional[str] = None
     subtotal: float = 0
     shipping_cost: float = 0
-    discount: float = 0
     total_amount: float = 0
     n_items: int = 1
     product_category: Optional[str] = None
-    source: Optional[str] = "manual"
     order_date: Optional[str] = None
     is_repeat_customer: bool = False
     customer_order_count: int = 0
-    customer_success_rate: float = 0.5
+    customer_total_spent: float = 0
     estimated_delivery_days: float = 7
     avg_product_weight: float = 1.0
+    # Payment features
+    payment_method: Optional[str] = None
+    has_boleto: Optional[int] = None
+    has_credit_card: Optional[int] = None
+    has_voucher: Optional[int] = None
+    has_debit_card: Optional[int] = None
+    n_payment_methods: int = 1
+    max_installments: int = 1
+    # Product quality features
+    avg_photos: float = 1.0
+    avg_desc_length: float = 500.0
+    avg_name_length: float = 30.0
+    avg_volume: float = 10000.0
+    # Geography features
+    seller_customer_same_state: int = 0
+    n_sellers: int = 1
 
 
 class BatchRiskRequest(BaseModel):
@@ -64,6 +77,7 @@ def model_info():
         "data": {
             "model_loaded": ml_service.predictor._loaded,
             "features": ml_service.predictor.feature_engineer.get_feature_names() if ml_service.predictor._loaded else [],
-            "risk_categories": list(OrderRiskPredictor.RISK_CATEGORIES.values()) if ml_service.predictor._loaded else [],
+            "n_features": len(ml_service.predictor.feature_engineer.get_feature_names()) if ml_service.predictor._loaded else 0,
+            "optimal_threshold": ml_service.predictor.optimal_threshold if ml_service.predictor._loaded else 0.5,
         },
     }

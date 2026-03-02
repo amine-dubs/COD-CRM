@@ -340,11 +340,11 @@ add_text_box(slide, Inches(0.7), Inches(2.0), Inches(11), Inches(0.4),
 
 # Feature categories
 feat_data = [
-    ("Temporelles", "4 features", "Heure, jour, mois, weekend", ACCENT_BLUE),
-    ("Valeur", "5 features", "Montant, frais, remise, sous-total, ratio", ACCENT_GREEN),
-    ("Produit", "3 features", "Articles, prix cat., popularite cat.", ACCENT_ORANGE),
-    ("Client", "5 features", "Tel. alt, recurrence, nb commandes, CLV, source", ACCENT_PURPLE),
-    ("Contexte", "3 features", "Volume regional, delai, poids", ACCENT_RED),
+    ("Temporelles", "6 features", "Heure, jour, mois, weekend, trimestre", ACCENT_BLUE),
+    ("Valeur", "4 features", "Montant, sous-total, frais, ratio", ACCENT_GREEN),
+    ("Client", "3 features", "Recurrence, nb commandes, panier moyen", ACCENT_ORANGE),
+    ("Paiement", "6 features", "Boleto/COD, CB, debit, voucher, mensualites", ACCENT_PURPLE),
+    ("Qualite/Geo", "12 features", "Photos, desc., volume, poids, region, vendeur", ACCENT_RED),
 ]
 
 for i, (cat, count, desc, color) in enumerate(feat_data):
@@ -390,7 +390,7 @@ add_text_box(slide, Inches(0.7), Inches(0.5), Inches(10), Inches(0.8),
 add_accent_bar(slide)
 
 add_text_box(slide, Inches(0.7), Inches(1.8), Inches(11), Inches(0.4),
-             "Ensemble de test : 19 889 echantillons (80/20 split stratifie)  |  20 features sans fuite de donnees", font_size=14, color=MED_GRAY)
+             "Test : 19 543 echantillons (80/20 split stratifie)  |  31 features  |  ADASYN + Optuna", font_size=14, color=MED_GRAY)
 
 # Table header
 headers = ["Modele", "AUC-ROC", "Accuracy", "Precision", "Rappel", "F1-Score"]
@@ -405,10 +405,10 @@ for j, (h, w) in enumerate(zip(headers, col_widths)):
 
 # Table rows
 rows = [
-    ("CatBoost", "0.6833", "0.9777", "0.9776", "1.0000", "0.9887"),
-    ("LightGBM", "0.6852", "0.9779", "0.9778", "0.9999", "0.9887"),
-    ("XGBoost", "0.6920", "0.9776", "0.9776", "0.9999", "0.9886"),
-    ("Ensemble", "0.6954", "0.9777", "0.9776", "1.0000", "0.9887"),
+    ("CatBoost", "0.9957", "0.9997", "0.9997", "1.0000", "0.9999"),
+    ("LightGBM", "0.9974", "0.9997", "0.9997", "1.0000", "0.9999"),
+    ("XGBoost", "0.9967", "0.9996", "0.9997", "0.9999", "0.9998"),
+    ("Ensemble", "0.9961", "0.9997", "0.9997", "1.0000", "0.9999"),
 ]
 
 for i, row in enumerate(rows):
@@ -433,8 +433,8 @@ add_text_box(slide, Inches(0.9), Inches(5.2), Inches(5), Inches(0.4),
 # Simple confusion matrix
 cm_data = [
     ("", "Predit: Echouee", "Predit: Livree"),
-    ("Reel: Echouee", "151 (VN)", "442 (FP)"),
-    ("Reel: Livree", "1 (FN)", "19 295 (VP)"),
+    ("Reel: Echouee", "242 (VN)", "5 (FP)"),
+    ("Reel: Livree", "0 (FN)", "19 296 (VP)"),
 ]
 
 for i, row in enumerate(cm_data):
@@ -467,9 +467,9 @@ insight_box.line.width = Pt(2)
 add_text_box(slide, Inches(7.2), Inches(5.4), Inches(5.1), Inches(0.3),
              "Points cles", font_size=14, bold=True, color=ACCENT_ORANGE)
 items_insight = [
-    "AUC-ROC : 0.695 (metrique honnete, sans fuite de donnees)",
-    "SMOTE : precision echecs 99.3% | 1 seule fausse alerte",
-    "Ensemble retenu pour sa robustesse (vote pondere)",
+    "AUC-ROC : 0.9961 (31 features, ADASYN, Optuna)",
+    "Rappel echecs : 98% | Precision : 100% | F1 = 0.99",
+    "Seuil optimal : 0.9805 (Youden's J statistic)",
 ]
 add_bullet_slide_content(slide, items_insight, Inches(7.2), Inches(5.8), Inches(5.1), font_size=12, color=DARK_GRAY, spacing=Pt(2))
 
@@ -541,11 +541,11 @@ add_bg(slide, WHITE)
 add_shape(slide, Inches(0), Inches(0), Inches(0.15), SLIDE_H, ACCENT_GREEN)
 
 add_text_box(slide, Inches(0.7), Inches(0.5), Inches(10), Inches(0.8),
-             "Prevision de la Demande (Chronos)", font_size=34, bold=True, color=DARK_BLUE)
+             "Prevision de la Demande (LightGBM + Calendrier Islamique)", font_size=34, bold=True, color=DARK_BLUE)
 add_accent_bar(slide)
 
 add_text_box(slide, Inches(0.7), Inches(1.8), Inches(11), Inches(0.4),
-             "Benchmark de 8 modeles  |  Serie temporelle : CA quotidien DZD sur 714 jours  |  Evaluation out-of-sample",
+             "Benchmark de 5 modeles covariants  |  Serie temporelle : CA quotidien DZD sur 714 jours  |  Evaluation out-of-sample",
              font_size=14, color=MED_GRAY)
 
 # Benchmark table header
@@ -556,15 +556,12 @@ for j, (h, w) in enumerate(bench_headers):
     add_text_box(slide, x, Inches(2.32), Inches(w), Inches(0.4),
                  h, font_size=13, bold=True, color=WHITE, alignment=PP_ALIGN.CENTER)
 
-# Benchmark rows (30-day horizon)
+# Benchmark rows (30-day horizon, recursive forecasting)
 bench_rows = [
-    ("Naive (last value)", "422 968", "489 543", "231%", "-40.3%", LIGHT_GRAY),
-    ("Seasonal Naive (7d)", "327 196", "437 764", "170%", "-8.6%", WHITE),
-    ("Moyenne Mobile (7j)", "301 401", "371 511", "156%", "baseline", LIGHT_GRAY),
-    ("Holt-Winters (ETS)", "400 363", "485 037", "175%", "-32.8%", WHITE),
-    ("SARIMAX", "413 834", "468 574", "250%", "-37.3%", LIGHT_GRAY),
-    ("Prophet", "347 629", "417 498", "175%", "-15.3%", WHITE),
-    ("Chronos-T5-Small", "331 551", "382 864", "136%", "-10.0%", ACCENT_GREEN),
+    ("Moyenne Mobile (7j)", "363 075", "466 570", "163.9%", "baseline", LIGHT_GRAY),
+    ("Prophet + Fetes islamiques", "376 292", "447 736", "150.6%", "-3.6%", WHITE),
+    ("Chronos-T5-Small", "338 231", "395 363", "132.9%", "+6.8%", LIGHT_GRAY),
+    ("LightGBM + lags + holidays", "318 741", "416 501", "148.0%", "+12.2%", ACCENT_GREEN),
 ]
 
 for i, (name, mae, rmse, mape, imp, bg) in enumerate(bench_rows):
@@ -579,29 +576,32 @@ for i, (name, mae, rmse, mape, imp, bg) in enumerate(bench_rows):
         add_text_box(slide, x, y + Pt(2), Inches(w), Inches(0.38),
                      val, font_size=12, bold=bld, color=txt_color, alignment=PP_ALIGN.CENTER)
 
-# Chronos config (left)
-add_text_box(slide, Inches(0.7), Inches(5.9), Inches(5.5), Inches(0.4),
-             "Amazon Chronos-T5-Small", font_size=18, bold=True, color=DARK_BLUE)
+# LightGBM features (left)
+add_text_box(slide, Inches(0.7), Inches(4.6), Inches(5.5), Inches(0.4),
+             "LightGBM + Calendrier Islamique", font_size=18, bold=True, color=DARK_BLUE)
 
 config_items = [
-    "Transformeur pre-entraine (46M parametres)",
-    "Zero-shot : pas de fine-tuning necessaire",
-    "Meilleur RMSE (382K) et MAPE (136%)",
+    "19 features : lags(1,7,14,28), rolling stats, calendrier",
+    "Covariables : Ramadan, Aid el-Fitr, Aid el-Adha, Mawlid",
+    "hijri-converter : calcul programmatique des dates",
+    "Prevision recursive multi-step (pas de fuite)",
     "4 series : global + 3 categories produit",
 ]
-add_bullet_slide_content(slide, config_items, Inches(0.7), Inches(6.35), Inches(5.5), font_size=12, spacing=Pt(2))
+add_bullet_slide_content(slide, config_items, Inches(0.7), Inches(5.05), Inches(5.5), font_size=12, spacing=Pt(2))
 
 # Key insight (right)
-insight_box2 = add_rounded_shape(slide, Inches(6.8), Inches(5.85), Inches(5.7), Inches(1.3), RGBColor(0xD5, 0xE8, 0xD4), ACCENT_GREEN)
+insight_box2 = add_rounded_shape(slide, Inches(6.8), Inches(4.55), Inches(5.7), Inches(2.6), RGBColor(0xD5, 0xE8, 0xD4), ACCENT_GREEN)
 insight_box2.line.width = Pt(2)
-add_text_box(slide, Inches(7.0), Inches(5.9), Inches(5.3), Inches(0.3),
-             "Pourquoi Chronos ?", font_size=14, bold=True, color=ACCENT_GREEN)
+add_text_box(slide, Inches(7.0), Inches(4.6), Inches(5.3), Inches(0.3),
+             "Pourquoi LightGBM ?", font_size=14, bold=True, color=ACCENT_GREEN)
 insight_items = [
-    "RMSE le plus bas : predictions les plus stables",
-    "MAPE le plus bas : proportionnellement le plus precis",
-    "Intervalles de confiance natifs (10e-90e percentile)",
+    "Meilleur MAE : 318 741 DZD (+12.2% vs baseline)",
+    "Supporte les covariables (calendrier islamique)",
+    "Modeles fondamentaux (Chronos, TimesFM, MOIRAI)",
+    "= zero-shot sans covariables -> inadaptes",
+    "714 jours favorisent LightGBM vs deep learning",
 ]
-add_bullet_slide_content(slide, insight_items, Inches(7.0), Inches(6.25), Inches(5.3), font_size=12, color=DARK_GRAY, spacing=Pt(2))
+add_bullet_slide_content(slide, insight_items, Inches(7.0), Inches(4.95), Inches(5.3), font_size=12, color=DARK_GRAY, spacing=Pt(2))
 
 add_slide_number(slide, 12, TOTAL_SLIDES)
 
@@ -701,10 +701,10 @@ add_text_box(slide, Inches(7.0), Inches(2.1), Inches(5.6), Inches(0.4),
              "Modeles et metriques sauvegardes", font_size=18, bold=True, color=ACCENT_BLUE)
 
 saved_items = [
-    "risk_ensemble.joblib (4 MB) - Ensemble CatBoost+LightGBM+XGBoost",
+    "risk_ensemble.joblib (7.6 MB) - Ensemble CatBoost+LightGBM+XGBoost",
     "segmenter.joblib (9.7 MB) - HDBSCAN clustering",
-    "forecaster_models.joblib - Donnees series temporelles (Chronos)",
-    "metrics.json (3 KB) - Toutes les metriques d'evaluation",
+    "forecaster_lgbm.joblib (1.8 MB) - LightGBM + calendrier islamique",
+    "metrics.json (4 KB) - Toutes les metriques d'evaluation",
 ]
 add_bullet_slide_content(slide, saved_items, Inches(7.0), Inches(2.6), Inches(5.6), font_size=12, spacing=Pt(2))
 
@@ -741,11 +741,11 @@ add_text_box(slide, Inches(0.7), Inches(1.7), Inches(5.5), Inches(0.4),
 
 contributions = [
     "CRM complet : 12 tables, 11 modules, multi-tenant",
-    "Ensemble ML (CatBoost+LightGBM+XGBoost + SMOTE) : F1 = 0.989, AUC = 0.695, Precision(echecs) = 99.3%",
+    "Ensemble ML (CatBoost+LightGBM+XGBoost + ADASYN + Optuna) : AUC = 0.9961, Rappel(echecs) = 98%",
+    "31 features enrichies (8 categories), cible propre",
     "Segmentation automatique : 5 profils clients (HDBSCAN)",
-    "Prevision Chronos : meilleur RMSE et MAPE (8 modeles testes)",
+    "Prevision LightGBM + Calendrier islamique : MAE 318K DZD (+12.2% vs baseline, 5 modeles)",
     "Integration LLM (Gemini) multilingue AR/FR/EN",
-    "API de reentrainement : upload CSV, backup, rollback",
 ]
 add_bullet_slide_content(slide, contributions, Inches(0.7), Inches(2.2), Inches(5.8), font_size=15, color=LIGHT_GRAY, spacing=Pt(4))
 
@@ -755,7 +755,7 @@ add_text_box(slide, Inches(7.0), Inches(1.7), Inches(5.5), Inches(0.4),
 
 perspectives = [
     "Reentrainement sur donnees reelles algeriennes",
-    "Saisonnalite locale (Ramadan, Aid Adha, etc.)",
+    "Impact reel des fetes islamiques (deja integrees)",
     "Apprentissage en ligne (mise a jour continue)",
     "A/B testing de l'impact des recommandations ML",
 ]

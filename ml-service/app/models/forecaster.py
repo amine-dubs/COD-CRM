@@ -1,3 +1,16 @@
+"""LightGBM-based demand forecaster with Islamic calendar events.
+
+Replaces the previous Chronos (zero-shot) approach with a trained LightGBM
+model that supports covariates:
+  - Lag features (1, 7, 14, 28 days)
+  - Rolling statistics (mean/std over 7, 14, 28 day windows)
+  - Calendar features (day-of-week, month, weekend, etc.)
+  - Islamic events (Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid)
+
+Selected after benchmarking 5 models (see benchmark_covariates.py):
+  LightGBM MAE 318,741 DZD (+12.2% vs baseline, +5.8% vs Chronos)
+"""
+
 import logging
 from typing import Optional
 from pathlib import Path
@@ -10,51 +23,124 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-CHRONOS_MODEL_NAME = "amazon/chronos-t5-small"
+# ── Islamic calendar events ──────────────────────────────────────
+
+def get_islamic_events(start_year: int, end_year: int) -> list[dict]:
+    """Compute dates for major Islamic events using hijri-converter.
+
+    Events shift ~11 days earlier each Gregorian year.
+    """
+    events = []
+    try:
+        from hijri_converter import Hijri
+
+        for greg_year in range(start_year, end_year + 1):
+            hijri_year = greg_year - 579
+
+            for hy in [hijri_year, hijri_year + 1]:
+                try:
+                    # Ramadan: month 9 (30 days)
+                    ramadan_start = Hijri(hy, 9, 1).to_gregorian()
+                    for d_off in range(30):
+                        d = ramadan_start + pd.Timedelta(days=d_off)
+                        if d.year in range(start_year, end_year + 1):
+                            events.append({"date": d, "event": "ramadan"})
+
+                    # Eid al-Fitr: month 10, days 1-3
+                    eid_fitr = Hijri(hy, 10, 1).to_gregorian()
+                    for d_off in range(3):
+                        d = eid_fitr + pd.Timedelta(days=d_off)
+                        if d.year in range(start_year, end_year + 1):
+                            events.append({"date": d, "event": "eid_al_fitr"})
+
+                    # Eid al-Adha: month 12, days 10-13
+                    eid_adha = Hijri(hy, 12, 10).to_gregorian()
+                    for d_off in range(4):
+                        d = eid_adha + pd.Timedelta(days=d_off)
+                        if d.year in range(start_year, end_year + 1):
+                            events.append({"date": d, "event": "eid_al_adha"})
+
+                    # Mawlid: month 3, day 12
+                    mawlid = Hijri(hy, 3, 12).to_gregorian()
+                    if mawlid.year in range(start_year, end_year + 1):
+                        events.append({"date": mawlid, "event": "mawlid"})
+
+                except (ValueError, OverflowError):
+                    continue
+    except ImportError:
+        logger.warning("hijri-converter not installed — Islamic events disabled")
+
+    # Deduplicate
+    seen = set()
+    unique = []
+    for e in events:
+        key = (e["date"], e["event"])
+        if key not in seen:
+            seen.add(key)
+            unique.append(e)
+    return unique
+
+
+FEATURE_COLS = [
+    "day_of_week", "month", "is_weekend", "day_of_month", "week_of_year",
+    "ramadan", "eid_al_fitr", "eid_al_adha", "mawlid",
+    "lag_1", "lag_7", "lag_14", "lag_28",
+    "rolling_mean_7", "rolling_mean_14", "rolling_mean_28",
+    "rolling_std_7", "rolling_std_14", "rolling_std_28",
+]
+
+EVENT_TYPES = ["ramadan", "eid_al_fitr", "eid_al_adha", "mawlid"]
 
 
 class DemandForecaster:
-    """Time-series demand forecasting using Amazon Chronos (pre-trained transformer).
-
-    Chronos is a foundation model for zero-shot time series forecasting.
-    It produces probabilistic forecasts via sampling, from which we extract
-    median predictions and confidence intervals (10th / 90th percentiles).
-    """
+    """LightGBM demand forecaster with Islamic calendar covariates."""
 
     def __init__(self):
         self.time_series_data: dict[str, dict] = {}
-        self.pipeline = None
+        self.models: dict[str, object] = {}  # per-category LightGBM models
+        self.residual_std: dict[str, float] = {}  # for confidence intervals
         self._loaded = False
 
     def load(self, model_dir: Optional[Path] = None) -> bool:
-        """Load saved time series data and initialize Chronos pipeline."""
+        """Load saved time series data and LightGBM models."""
         model_dir = model_dir or settings.MODEL_DIR
-        path = model_dir / "forecaster_models.joblib"
 
-        if not path.exists():
+        # Load time series history
+        ts_path = model_dir / "forecaster_models.joblib"
+        if not ts_path.exists():
             return False
 
         try:
-            data = joblib.load(path)
+            data = joblib.load(ts_path)
         except Exception as e:
             logger.warning("Could not load forecaster data: %s", e)
             return False
 
-        # Auto-detect format: new (dict of date/value lists) vs legacy (Prophet objects)
+        # Accept new format (dict of date/value lists) or legacy Prophet format
         first_val = next(iter(data.values()), None)
         if first_val is None:
             return False
 
         if isinstance(first_val, dict) and "values" in first_val:
-            # New Chronos-compatible format
             self.time_series_data = data
         else:
-            # Legacy Prophet model format — extract training history
             if not self._extract_from_prophet(data):
                 return False
 
+        # Load LightGBM models
+        lgbm_path = model_dir / "forecaster_lgbm.joblib"
+        if lgbm_path.exists():
+            try:
+                saved = joblib.load(lgbm_path)
+                self.models = saved.get("models", {})
+                self.residual_std = saved.get("residual_std", {})
+                logger.info(
+                    "LightGBM forecaster loaded (%d categories)", len(self.models)
+                )
+            except Exception as e:
+                logger.warning("Could not load LightGBM models: %s", e)
+
         self._loaded = True
-        self._init_chronos()
         return True
 
     def _extract_from_prophet(self, models: dict) -> bool:
@@ -72,37 +158,12 @@ class DemandForecaster:
             logger.warning("Could not extract data from Prophet models: %s", e)
             return False
 
-    def _init_chronos(self):
-        """Initialize the Chronos pipeline (downloads model on first run)."""
-        try:
-            import torch
-            from chronos import ChronosPipeline
-
-            logger.info("Loading Chronos model (%s)...", CHRONOS_MODEL_NAME)
-            self.pipeline = ChronosPipeline.from_pretrained(
-                CHRONOS_MODEL_NAME,
-                device_map="cpu",
-                torch_dtype=torch.float32,
-            )
-            logger.info("Chronos model loaded successfully")
-        except ImportError:
-            logger.warning(
-                "chronos-forecasting or torch not installed. "
-                "Install with: pip install chronos-forecasting. "
-                "Falling back to statistical method."
-            )
-        except Exception as e:
-            logger.warning("Could not load Chronos model: %s. Using statistical fallback.", e)
-
     # ── Public API ────────────────────────────────────────────
 
     def prepare_time_series(
         self, orders_df: pd.DataFrame, category: Optional[str] = None
     ) -> pd.DataFrame:
-        """Prepare daily time series from orders data.
-
-        Expected columns: order_date, product_category (optional), total_amount
-        """
+        """Prepare daily time series from orders data."""
         df = orders_df.copy()
         df["order_date"] = pd.to_datetime(df["order_date"])
         df["ds"] = df["order_date"].dt.date
@@ -117,17 +178,13 @@ class DemandForecaster:
         )
         daily["ds"] = pd.to_datetime(daily["ds"])
 
-        # Fill missing dates with 0
         full_range = pd.date_range(daily["ds"].min(), daily["ds"].max(), freq="D")
         daily = daily.set_index("ds").reindex(full_range, fill_value=0).reset_index()
         daily.columns = ["ds", "y", "order_count"]
         return daily
 
     def forecast(self, category: str = "all", periods: int = 30) -> dict:
-        """Generate demand forecast for a category.
-
-        Returns dict with dates, predicted values, and confidence intervals.
-        """
+        """Generate demand forecast for a category."""
         if not self._loaded:
             raise RuntimeError("Models not loaded. Call load() first.")
 
@@ -140,67 +197,119 @@ class DemandForecaster:
         dates = pd.to_datetime(ts["dates"])
         last_date = dates.max()
 
-        if self.pipeline is not None:
-            return self._forecast_chronos(values, last_date, category, periods)
+        # Use LightGBM if available, else statistical fallback
+        lgbm_model = self.models.get(model_key)
+        if lgbm_model is not None:
+            return self._forecast_lgbm(
+                lgbm_model, values, last_date, category, periods, model_key
+            )
         return self._forecast_statistical(values, last_date, category, periods)
 
     def get_available_categories(self) -> list[str]:
         """Return list of categories with available time series data."""
         return list(self.time_series_data.keys())
 
-    # ── Chronos Forecasting ───────────────────────────────────
+    # ── LightGBM Forecasting (recursive multi-step) ───────────
 
-    def _forecast_chronos(
-        self, values: np.ndarray, last_date, category: str, periods: int
+    def _forecast_lgbm(
+        self, model, values: np.ndarray, last_date, category: str,
+        periods: int, model_key: str,
     ) -> dict:
-        """Forecast using the Chronos pre-trained transformer."""
-        import torch
+        """Forecast using trained LightGBM with recursive multi-step prediction."""
+        history_values = list(values)
+        predictions = []
 
-        context = torch.tensor(values, dtype=torch.float32).unsqueeze(0)  # (1, T)
-
-        forecast_tensor = self.pipeline.predict(
-            context, prediction_length=periods, num_samples=20
-        )  # (1, num_samples, periods)
-
-        # Extract median and confidence intervals (10th / 90th percentile)
-        forecast_float = forecast_tensor.float()
-        median = torch.median(forecast_float, dim=1).values  # (1, periods)
-        lower = torch.quantile(forecast_float, 0.1, dim=1)  # (1, periods)
-        upper = torch.quantile(forecast_float, 0.9, dim=1)  # (1, periods)
-
-        # Remove batch dim → numpy, ensure at least 1-D
-        median = np.atleast_1d(median.squeeze(0).numpy())
-        lower = np.atleast_1d(lower.squeeze(0).numpy())
-        upper = np.atleast_1d(upper.squeeze(0).numpy())
+        # Pre-compute Islamic event dates for the forecast horizon
+        start_year = int(last_date.year)
+        end_year = start_year + 2
+        events = get_islamic_events(start_year, end_year)
+        event_dates_by_type = {}
+        for etype in EVENT_TYPES:
+            event_dates_by_type[etype] = set(
+                pd.Timestamp(e["date"]).normalize()
+                for e in events
+                if e["event"] == etype
+            )
 
         future_dates = pd.date_range(
             start=last_date + pd.Timedelta(days=1), periods=periods, freq="D"
         )
 
-        predictions = []
         for i in range(periods):
-            predictions.append(
-                {
-                    "ds": future_dates[i].strftime("%Y-%m-%d"),
-                    "yhat": round(max(0, float(median[i])), 2),
-                    "yhat_lower": round(max(0, float(lower[i])), 2),
-                    "yhat_upper": round(max(0, float(upper[i])), 2),
-                }
+            dt = future_dates[i]
+            row = self._build_features_for_date(
+                dt, history_values, event_dates_by_type
             )
+            X_row = np.array([[row[c] for c in FEATURE_COLS]])
+            pred_val = max(0, float(model.predict(X_row)[0]))
+            predictions.append(pred_val)
+            history_values.append(pred_val)
+
+        # Confidence intervals from training residual std
+        std = self.residual_std.get(model_key, np.std(values[-30:]) * 0.3)
+        pred_arr = np.array(predictions)
+
+        results = []
+        for i in range(periods):
+            # Wider CI as horizon grows (uncertainty accumulates)
+            ci_factor = 1.28 * (1 + i * 0.02)  # ~80% CI, growing with horizon
+            results.append({
+                "ds": future_dates[i].strftime("%Y-%m-%d"),
+                "yhat": round(float(pred_arr[i]), 2),
+                "yhat_lower": round(max(0, float(pred_arr[i] - std * ci_factor)), 2),
+                "yhat_upper": round(float(pred_arr[i] + std * ci_factor), 2),
+            })
 
         return {
             "category": category,
             "periods": periods,
-            "method": "chronos-t5-small",
-            "predictions": predictions,
+            "method": "lightgbm",
+            "predictions": results,
         }
+
+    @staticmethod
+    def _build_features_for_date(
+        dt: pd.Timestamp,
+        history_values: list[float],
+        event_dates_by_type: dict[str, set],
+    ) -> dict:
+        """Build feature dict for a single prediction date."""
+        row = {
+            "day_of_week": dt.dayofweek,
+            "month": dt.month,
+            "is_weekend": int(dt.dayofweek >= 5),
+            "day_of_month": dt.day,
+            "week_of_year": int(dt.isocalendar()[1]),
+        }
+
+        # Islamic events
+        dt_norm = dt.normalize()
+        for etype in EVENT_TYPES:
+            row[etype] = int(dt_norm in event_dates_by_type.get(etype, set()))
+
+        # Lag features
+        n = len(history_values)
+        row["lag_1"] = history_values[n - 1]
+        row["lag_7"] = history_values[n - 7] if n >= 7 else history_values[0]
+        row["lag_14"] = history_values[n - 14] if n >= 14 else history_values[0]
+        row["lag_28"] = history_values[n - 28] if n >= 28 else history_values[0]
+
+        # Rolling stats
+        for window in [7, 14, 28]:
+            recent = history_values[max(0, n - window) : n]
+            row[f"rolling_mean_{window}"] = float(np.mean(recent))
+            row[f"rolling_std_{window}"] = (
+                float(np.std(recent)) if len(recent) > 1 else 0.0
+            )
+
+        return row
 
     # ── Statistical Fallback ──────────────────────────────────
 
     def _forecast_statistical(
         self, values: np.ndarray, last_date, category: str, periods: int
     ) -> dict:
-        """Simple moving-average forecast when Chronos is not available."""
+        """Simple moving-average forecast when LightGBM model not available."""
         if len(values) < 7:
             raise ValueError("Not enough data for forecasting (need at least 7 days)")
 
@@ -211,14 +320,12 @@ class DemandForecaster:
         for i in range(1, periods + 1):
             date = last_date + pd.Timedelta(days=i)
             predicted = ma7 * 0.6 + ma30 * 0.4
-            predictions.append(
-                {
-                    "ds": date.strftime("%Y-%m-%d"),
-                    "yhat": round(max(0, predicted), 2),
-                    "yhat_lower": round(max(0, predicted * 0.7), 2),
-                    "yhat_upper": round(max(0, predicted * 1.3), 2),
-                }
-            )
+            predictions.append({
+                "ds": date.strftime("%Y-%m-%d"),
+                "yhat": round(max(0, predicted), 2),
+                "yhat_lower": round(max(0, predicted * 0.7), 2),
+                "yhat_upper": round(max(0, predicted * 1.3), 2),
+            })
 
         return {
             "category": category,

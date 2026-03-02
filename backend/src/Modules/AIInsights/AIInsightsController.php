@@ -55,38 +55,36 @@ class AIInsightsController
             return Response::error('Order not found', 404);
         }
 
-        // Check customer history
+        // Check customer history (only count delivered orders for clean metrics)
         $customerHistory = $this->db->queryOne(
             "SELECT COUNT(*) as order_count,
-                    SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as delivered_count
+                    SUM(total_amount) as total_spent
              FROM orders
-             WHERE store_id = ? AND customer_phone = ? AND id < ?",
+             WHERE store_id = ? AND customer_phone = ? AND id < ? AND status = 'delivered'",
             [$storeId, $order['customer_phone'], $id]
         );
 
         $orderCount    = (int)($customerHistory['order_count'] ?? 0);
-        $deliveredCount = (int)($customerHistory['delivered_count'] ?? 0);
+        $totalSpent    = (float)($customerHistory['total_spent'] ?? 0);
 
         // Build payload for ML service
         $orderData = [
             'order_id'              => $order['id'],
             'customer_name'         => $order['customer_name'],
             'customer_phone'        => $order['customer_phone'],
-            'customer_phone_2'      => $order['customer_phone_2'],
             'wilaya_id'             => $order['wilaya_id'],
             'commune'               => $order['commune'],
             'subtotal'              => (float)$order['subtotal'],
             'shipping_cost'         => (float)$order['shipping_cost'],
-            'discount'              => (float)$order['discount'],
             'total_amount'          => (float)$order['total_amount'],
             'n_items'               => (int)($order['n_items'] ?? 1),
             'product_category'      => $order['product_categories'] ?? 'unknown',
-            'source'                => $order['source'],
             'order_date'            => $order['created_at'],
             'is_repeat_customer'    => $orderCount > 0,
             'customer_order_count'  => $orderCount,
-            'customer_success_rate' => $orderCount > 0 ? $deliveredCount / $orderCount : 0.5,
+            'customer_total_spent'  => $totalSpent,
             'estimated_delivery_days' => 7,
+            'payment_method'        => 'cod', // Default for Algerian COD e-commerce
         ];
 
         $result = $this->aiService->getOrderRisk($orderData);

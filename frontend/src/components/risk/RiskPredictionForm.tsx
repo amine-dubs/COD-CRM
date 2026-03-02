@@ -14,16 +14,31 @@ interface RiskPredictionFormProps {
 const DEFAULT_VALUES: OrderRiskRequest = {
   subtotal: 0,
   shipping_cost: 0,
-  discount: 0,
   total_amount: 0,
   n_items: 1,
-  source: "manual",
   is_repeat_customer: false,
   customer_order_count: 0,
-  customer_success_rate: 0.5,
+  customer_total_spent: 0,
   estimated_delivery_days: 7,
   avg_product_weight: 1.0,
+  payment_method: "cod",
+  n_payment_methods: 1,
+  max_installments: 1,
+  avg_photos: 1.0,
+  avg_desc_length: 500,
+  avg_name_length: 30,
+  avg_volume: 10000,
+  seller_customer_same_state: 0,
+  n_sellers: 1,
 };
+
+const PAYMENT_OPTIONS = [
+  { value: "cod", label: "Cash on Delivery (COD)" },
+  { value: "credit_card", label: "Credit Card" },
+  { value: "debit_card", label: "Debit Card" },
+  { value: "boleto", label: "Boleto" },
+  { value: "voucher", label: "Voucher" },
+];
 
 export function RiskPredictionForm({
   onSubmit,
@@ -31,10 +46,10 @@ export function RiskPredictionForm({
 }: RiskPredictionFormProps) {
   const [form, setForm] = useState(DEFAULT_VALUES);
 
-  const update = (field: keyof OrderRiskRequest, value: string | boolean) => {
+  const update = (field: keyof OrderRiskRequest, value: string | boolean | number) => {
     setForm((prev) => ({
       ...prev,
-      [field]: typeof value === "boolean" ? value : Number(value) || 0,
+      [field]: typeof value === "boolean" ? value : typeof value === "string" ? (Number(value) || value) : value,
     }));
   };
 
@@ -66,18 +81,43 @@ export function RiskPredictionForm({
             onChange={(e) => update("shipping_cost", e.target.value)}
           />
           <Input
-            label="Discount"
-            type="number"
-            value={form.discount}
-            onChange={(e) => update("discount", e.target.value)}
-          />
-          <Input
             label="Items Count"
             type="number"
             min={1}
             value={form.n_items}
             onChange={(e) => update("n_items", e.target.value)}
           />
+        </div>
+
+        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+            Payment
+          </h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Payment Method
+              </label>
+              <select
+                value={form.payment_method || "cod"}
+                onChange={(e) => update("payment_method", e.target.value)}
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100"
+              >
+                {PAYMENT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Input
+              label="Max Installments"
+              type="number"
+              min={1}
+              value={form.max_installments}
+              onChange={(e) => update("max_installments", e.target.value)}
+            />
+          </div>
         </div>
 
         <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
@@ -93,13 +133,11 @@ export function RiskPredictionForm({
               onChange={(e) => update("customer_order_count", e.target.value)}
             />
             <Input
-              label="Success Rate (0-1)"
+              label="Total Spent (DZD)"
               type="number"
-              step={0.1}
               min={0}
-              max={1}
-              value={form.customer_success_rate}
-              onChange={(e) => update("customer_success_rate", e.target.value)}
+              value={form.customer_total_spent}
+              onChange={(e) => update("customer_total_spent", e.target.value)}
             />
           </div>
           <label className="flex items-center gap-2 mt-3 text-sm text-gray-700 dark:text-gray-300">
@@ -126,9 +164,10 @@ export function RiskPredictionForm({
               onChange={(e) => update("estimated_delivery_days", e.target.value)}
             />
             <Input
-              label="Avg Product Weight (g)"
+              label="Avg Product Weight (kg)"
               type="number"
               min={0}
+              step={0.1}
               value={form.avg_product_weight}
               onChange={(e) => update("avg_product_weight", e.target.value)}
             />

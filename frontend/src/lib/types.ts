@@ -17,23 +17,36 @@ export interface OrderRiskRequest {
   order_id?: number;
   customer_name?: string;
   customer_phone?: string;
-  customer_phone_2?: string;
   wilaya_id?: number;
   customer_state?: string;
   commune?: string;
   subtotal: number;
   shipping_cost: number;
-  discount: number;
   total_amount: number;
   n_items: number;
   product_category?: string;
-  source?: string;
   order_date?: string;
   is_repeat_customer: boolean;
   customer_order_count: number;
-  customer_success_rate: number;
+  customer_total_spent: number;
   estimated_delivery_days: number;
   avg_product_weight: number;
+  // Payment features
+  payment_method?: string;
+  has_boleto?: number;
+  has_credit_card?: number;
+  has_voucher?: number;
+  has_debit_card?: number;
+  n_payment_methods: number;
+  max_installments: number;
+  // Product quality features
+  avg_photos: number;
+  avg_desc_length: number;
+  avg_name_length: number;
+  avg_volume: number;
+  // Geography features
+  seller_customer_same_state: number;
+  n_sellers: number;
 }
 
 export type RiskCategory = "critical" | "high" | "medium" | "low";
@@ -50,7 +63,8 @@ export interface RiskPredictionResult {
 export interface ModelInfo {
   model_loaded: boolean;
   features: string[];
-  risk_categories: RiskCategory[];
+  n_features: number;
+  optimal_threshold: number;
 }
 
 // === Segmentation ===
@@ -94,15 +108,27 @@ export interface ConfusionMatrix {
 
 export interface RiskMetrics {
   models: Record<string, ModelMetric>;
+  optimal_threshold: number;
   ensemble_weights: Record<string, number>;
-  confusion_matrix: ConfusionMatrix;
+  confusion_matrix_default: ConfusionMatrix & { threshold: number };
+  confusion_matrix_optimal: ConfusionMatrix & { threshold: number };
+  per_class_metrics: Record<string, Record<string, { precision: number; recall: number; f1: number }>>;
   dataset: {
     total_samples: number;
     train_samples: number;
     test_samples: number;
     positive_rate: number;
+    original_orders: number;
+    clean_orders: number;
+    failure_rate: number;
   };
   features: string[];
+  optimizations: {
+    target: string;
+    resampling: string;
+    hyperparameters: string;
+    n_features: number;
+  };
 }
 
 export interface SegmentationMetrics {
@@ -115,7 +141,7 @@ export interface SegmentationMetrics {
 export interface ForecastingMetrics {
   models_trained: string[];
   method: string;
-  prophet: { mae: number; rmse: number };
+  lightgbm: { mae: number; rmse: number };
   baseline_moving_avg: { mae: number; rmse: number };
   improvement_mae_pct: number;
   time_series_days: number;

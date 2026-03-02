@@ -180,12 +180,22 @@ def get_expected_data_format():
                 "order_estimated_delivery_date": "Estimated delivery date (improves risk features)",
                 "product_weight_g": "Product weight in grams (improves logistics risk)",
                 "order_item_id": "Item count per order (if multiple rows per order)",
+                "payment_type": "Payment method: credit_card, boleto/cod, debit_card, voucher",
+                "payment_installments": "Number of payment installments",
+                "product_photos_qty": "Number of product photos",
+                "product_description_lenght": "Product description length (characters)",
+                "product_name_lenght": "Product name length (characters)",
+                "product_length_cm": "Product length in cm (for volume calculation)",
+                "product_height_cm": "Product height in cm",
+                "product_width_cm": "Product width in cm",
+                "seller_state": "Seller region/state (for geographic matching)",
             },
             "notes": [
                 "CSV must be UTF-8 encoded",
                 "Minimum 100 orders recommended for meaningful training",
                 "Monetary values should be in your local currency (DZD)",
                 "Previous models are automatically backed up before retraining",
+                "Enhanced features (payment type, product quality, geography) significantly improve risk prediction AUC",
             ],
         },
     }
@@ -209,18 +219,20 @@ def _prepare_custom_data(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df["order_date"] = pd.Timestamp.now()
 
-    # Status → is_delivered
+    # Status → is_delivered and order_status
     status_col = None
     for col in ["order_status", "status"]:
         if col in df.columns:
             status_col = col
             break
     if status_col:
+        df["order_status"] = df[status_col].str.lower().str.strip()
         delivered_keywords = ["delivered", "livree", "livré", "completed", "done", "success"]
-        df["is_delivered"] = df[status_col].str.lower().str.strip().apply(
+        df["is_delivered"] = df["order_status"].apply(
             lambda s: 1 if any(k in str(s) for k in delivered_keywords) else 0
         )
     else:
+        df["order_status"] = "delivered"
         df["is_delivered"] = 1
 
     # Payment / total amount
@@ -260,11 +272,9 @@ def _prepare_custom_data(df: pd.DataFrame) -> pd.DataFrame:
             df["product_category"] = "unknown"
 
     # Numeric defaults
-    df["shipping_cost"] = pd.to_numeric(df.get("shipping_cost", 0), errors="coerce").fillna(400)
-    df["discount"] = pd.to_numeric(df.get("discount", 0), errors="coerce").fillna(0)
+    df["shipping_cost"] = pd.to_numeric(df.get("shipping_cost", df.get("freight_value", 0)), errors="coerce").fillna(400)
     df["n_items"] = pd.to_numeric(df.get("n_items", df.get("order_item_id", 1)), errors="coerce").fillna(1).astype(int)
     df["avg_product_weight"] = pd.to_numeric(df.get("product_weight_g", 1000), errors="coerce").fillna(1000) / 1000
-    df["customer_phone_2"] = df.get("customer_phone_2", None)
 
     if "order_estimated_delivery_date" in df.columns:
         df["estimated_delivery_days"] = (
@@ -273,17 +283,53 @@ def _prepare_custom_data(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df["estimated_delivery_days"] = 7
 
+    # Payment features
+    if "payment_type" in df.columns:
+        pt = df["payment_type"].str.lower().str.strip()
+        df["has_boleto"] = pt.isin(["boleto", "cod", "cash_on_delivery"]).astype(int)
+        df["has_credit_card"] = pt.isin(["credit_card", "credit"]).astype(int)
+        df["has_voucher"] = (pt == "voucher").astype(int)
+        df["has_debit_card"] = pt.isin(["debit_card", "debit"]).astype(int)
+    else:
+        df["has_boleto"] = 0
+        df["has_credit_card"] = 1
+        df["has_voucher"] = 0
+        df["has_debit_card"] = 0
+    df["n_payment_methods"] = pd.to_numeric(df.get("n_payment_methods", 1), errors="coerce").fillna(1).astype(int)
+    df["max_installments"] = pd.to_numeric(df.get("payment_installments", df.get("max_installments", 1)), errors="coerce").fillna(1).astype(int)
+
+    # Product quality features
+    df["avg_photos"] = pd.to_numeric(df.get("product_photos_qty", df.get("avg_photos", 1)), errors="coerce").fillna(1)
+    df["avg_desc_length"] = pd.to_numeric(df.get("product_description_lenght", df.get("avg_desc_length", 500)), errors="coerce").fillna(500)
+    df["avg_name_length"] = pd.to_numeric(df.get("product_name_lenght", df.get("avg_name_length", 30)), errors="coerce").fillna(30)
+
+    # Product volume
+    length = pd.to_numeric(df.get("product_length_cm", 0), errors="coerce").fillna(0)
+    height = pd.to_numeric(df.get("product_height_cm", 0), errors="coerce").fillna(0)
+    width = pd.to_numeric(df.get("product_width_cm", 0), errors="coerce").fillna(0)
+    df["avg_volume"] = length * height * width
+    df.loc[df["avg_volume"] == 0, "avg_volume"] = 10000
+
+    # Geography features
+    if "seller_state" in df.columns:
+        df["seller_customer_same_state"] = (df["customer_state"] == df["seller_state"]).astype(int)
+    else:
+        df["seller_customer_same_state"] = 0
+    df["n_sellers"] = pd.to_numeric(df.get("n_sellers", 1), errors="coerce").fillna(1).astype(int)
+
     # Order ID
     if "order_id" not in df.columns:
         df["order_id"] = range(len(df))
 
     # Customer history
     df = df.sort_values("order_date")
-    cust_stats = df.groupby("customer_unique_id").agg(
+    cust_stats = df[df["is_delivered"] == 1].groupby("customer_unique_id").agg(
         customer_order_count=("order_id", "count"),
-        customer_success_rate=("is_delivered", "mean"),
+        customer_total_spent=("total_amount", "sum"),
     ).reset_index()
     df = df.merge(cust_stats, on="customer_unique_id", how="left")
+    df["customer_order_count"] = df["customer_order_count"].fillna(0).astype(int)
+    df["customer_total_spent"] = df["customer_total_spent"].fillna(0)
     df["is_repeat_customer"] = (df["customer_order_count"] > 1).astype(int)
 
     df.dropna(subset=["order_date"], inplace=True)
