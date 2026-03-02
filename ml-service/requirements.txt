@@ -15,6 +15,9 @@ joblib==1.4.2
 # Clustering - SOTA
 hdbscan==0.8.39
 
+# Data augmentation - SMOTE for class imbalance
+imbalanced-learn==0.14.1
+
 # Time series forecasting - SOTA (pre-trained transformer)
 chronos-forecasting>=1.4.0
 

@@ -1,53 +1,53 @@
 {
-  "trained_at": "2026-03-01T06:44:19.815077",
+  "trained_at": "2026-03-02T11:18:49.648516",
   "dataset": "olist_brazilian_ecommerce",
   "total_orders": 99441,
   "delivery_rate": 0.9702,
   "risk_prediction": {
     "models": {
       "catboost": {
-        "auc_roc": 0.6760265738480169,
-        "accuracy": 0.9421790939715421,
-        "precision": 0.9781806682829135,
-        "recall": 0.9618573797678275,
-        "f1_score": 0.9699503527567285
+        "auc_roc": 0.6833493437813742,
+        "accuracy": 0.9777263814168636,
+        "precision": 0.9775571204215006,
+        "recall": 1.0,
+        "f1_score": 0.9886512104521583
       },
       "lightgbm": {
-        "auc_roc": 0.681813319574136,
-        "accuracy": 0.9481120217205491,
-        "precision": 0.9790180444817457,
-        "recall": 0.9672470978441128,
-        "f1_score": 0.9730969760166841
+        "auc_roc": 0.6851618803117633,
+        "accuracy": 0.9778772185630248,
+        "precision": 0.977802554226637,
+        "recall": 0.9998963515754561,
+        "f1_score": 0.9887260428410372
       },
       "xgboost": {
-        "auc_roc": 0.6950383254469642,
-        "accuracy": 0.9446427673588416,
-        "precision": 0.9790427044389448,
-        "recall": 0.9635675787728026,
-        "f1_score": 0.9712435030166897
+        "auc_roc": 0.6920225583018018,
+        "accuracy": 0.9776258233194228,
+        "precision": 0.9776032429693438,
+        "recall": 0.9998445273631841,
+        "f1_score": 0.9885988060772206
       },
       "ensemble": {
-        "auc_roc": 0.6941765840555513,
-        "accuracy": 0.9585197848056715,
-        "precision": 0.9788955146486907,
-        "recall": 0.9783374792703151,
-        "f1_score": 0.9786164174075322
+        "auc_roc": 0.6953634721278374,
+        "accuracy": 0.9777263814168636,
+        "precision": 0.9776055124892334,
+        "recall": 0.999948175787728,
+        "f1_score": 0.9886506289549868
       }
     },
     "ensemble_weights": {
-      "catboost": 0.32930671076067247,
-      "lightgbm": 0.3321255558694227,
-      "xgboost": 0.3385677333699047
+      "catboost": 0.33163704939946365,
+      "lightgbm": 0.33251669357024854,
+      "xgboost": 0.33584625703028775
     },
     "confusion_matrix": {
-      "tn": 186,
-      "fp": 407,
-      "fn": 418,
-      "tp": 18878
+      "tn": 151,
+      "fp": 442,
+      "fn": 1,
+      "tp": 19295
     },
     "dataset": {
       "total_samples": 99441,
-      "train_samples": 79552,
+      "train_samples": 92618,
       "test_samples": 19889,
       "positive_rate": 0.9702034372140264
     },
@@ -125,14 +125,14 @@
     ],
     "method": "chronos-t5-small",
     "chronos": {
-      "mae": 340019.8,
-      "rmse": 400893.32
+      "mae": 347174.79,
+      "rmse": 406606.89
     },
     "baseline_moving_avg": {
       "mae": 363075.07,
       "rmse": 466569.89
     },
-    "improvement_mae_pct": 6.4,
+    "improvement_mae_pct": 4.4,
     "time_series_days": 714,
     "test_days": 30
   }

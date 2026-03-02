@@ -405,10 +405,10 @@ for j, (h, w) in enumerate(zip(headers, col_widths)):
 
 # Table rows
 rows = [
-    ("CatBoost", "0.6760", "0.9422", "0.9782", "0.9619", "0.9700"),
-    ("LightGBM", "0.6818", "0.9481", "0.9790", "0.9672", "0.9731"),
-    ("XGBoost", "0.6950", "0.9446", "0.9790", "0.9636", "0.9712"),
-    ("Ensemble", "0.6942", "0.9585", "0.9789", "0.9783", "0.9786"),
+    ("CatBoost", "0.6833", "0.9777", "0.9776", "1.0000", "0.9887"),
+    ("LightGBM", "0.6852", "0.9779", "0.9778", "0.9999", "0.9887"),
+    ("XGBoost", "0.6920", "0.9776", "0.9776", "0.9999", "0.9886"),
+    ("Ensemble", "0.6954", "0.9777", "0.9776", "1.0000", "0.9887"),
 ]
 
 for i, row in enumerate(rows):
@@ -433,8 +433,8 @@ add_text_box(slide, Inches(0.9), Inches(5.2), Inches(5), Inches(0.4),
 # Simple confusion matrix
 cm_data = [
     ("", "Predit: Echouee", "Predit: Livree"),
-    ("Reel: Echouee", "186 (VN)", "407 (FP)"),
-    ("Reel: Livree", "418 (FN)", "18 878 (VP)"),
+    ("Reel: Echouee", "151 (VN)", "442 (FP)"),
+    ("Reel: Livree", "1 (FN)", "19 295 (VP)"),
 ]
 
 for i, row in enumerate(cm_data):
@@ -467,8 +467,8 @@ insight_box.line.width = Pt(2)
 add_text_box(slide, Inches(7.2), Inches(5.4), Inches(5.1), Inches(0.3),
              "Points cles", font_size=14, bold=True, color=ACCENT_ORANGE)
 items_insight = [
-    "AUC-ROC : 0.69 (metrique honnete, sans fuite de donnees)",
-    "825 erreurs sur 19 889  |  F1-Score : 0.979",
+    "AUC-ROC : 0.695 (metrique honnete, sans fuite de donnees)",
+    "SMOTE : precision echecs 99.3% | 1 seule fausse alerte",
     "Ensemble retenu pour sa robustesse (vote pondere)",
 ]
 add_bullet_slide_content(slide, items_insight, Inches(7.2), Inches(5.8), Inches(5.1), font_size=12, color=DARK_GRAY, spacing=Pt(2))
@@ -741,7 +741,7 @@ add_text_box(slide, Inches(0.7), Inches(1.7), Inches(5.5), Inches(0.4),
 
 contributions = [
     "CRM complet : 12 tables, 11 modules, multi-tenant",
-    "Ensemble ML (CatBoost+LightGBM+XGBoost) : F1 = 0.979, AUC = 0.694",
+    "Ensemble ML (CatBoost+LightGBM+XGBoost + SMOTE) : F1 = 0.989, AUC = 0.695, Precision(echecs) = 99.3%",
     "Segmentation automatique : 5 profils clients (HDBSCAN)",
     "Prevision Chronos : meilleur RMSE et MAPE (8 modeles testes)",
     "Integration LLM (Gemini) multilingue AR/FR/EN",

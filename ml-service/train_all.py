@@ -159,7 +159,26 @@ def train_risk_ensemble(df: pd.DataFrame):
     neg = (y_train == 0).sum()
     pos = (y_train == 1).sum()
     scale_weight = neg / pos if pos > 0 else 1
-    logger.info(f"Train: {len(X_train)} | Test: {len(X_test)} | Scale weight: {scale_weight:.3f}")
+    logger.info(f"Train before SMOTE: {len(X_train)} | Pos: {pos} | Neg: {neg} | Ratio: {scale_weight:.1f}:1")
+
+    # ── SMOTE: oversample failed deliveries (minority class) ──
+    # Real Algerian COD has 30-50% failure rate; Olist has only 3%.
+    # sampling_strategy=0.2 targets neg = 20% of pos → ~5:1 ratio (vs original 32:1).
+    # Applied ONLY to X_train; X_test is kept pristine for honest evaluation.
+    try:
+        from imblearn.over_sampling import SMOTE
+        smote = SMOTE(sampling_strategy=0.2, random_state=42, k_neighbors=5)
+        X_train_arr = X_train.values if hasattr(X_train, "values") else X_train
+        X_train_sm, y_train_sm = smote.fit_resample(X_train_arr, y_train)
+        X_train = pd.DataFrame(X_train_sm, columns=feature_names)
+        y_train = y_train_sm
+        neg_sm = (y_train == 0).sum()
+        pos_sm = (y_train == 1).sum()
+        scale_weight = 1.0  # SMOTE rebalanced the data
+        logger.info(f"Train after  SMOTE: {len(X_train)} | Pos: {pos_sm} | Neg: {neg_sm} | Ratio: {pos_sm/neg_sm:.1f}:1")
+    except ImportError:
+        logger.warning("imbalanced-learn not installed — skipping SMOTE (class weights still active)")
+    logger.info(f"Test:               {len(X_test)} samples (untouched by SMOTE)")
 
     # ── CatBoost ──
     logger.info("Training CatBoost...")
@@ -168,7 +187,6 @@ def train_risk_ensemble(df: pd.DataFrame):
         depth=8,
         learning_rate=0.05,
         l2_leaf_reg=3,
-        auto_class_weights="Balanced",
         eval_metric="AUC",
         random_seed=42,
         verbose=0,
@@ -187,7 +205,6 @@ def train_risk_ensemble(df: pd.DataFrame):
         num_leaves=63,
         subsample=0.8,
         colsample_bytree=0.8,
-        is_unbalance=True,
         random_state=42,
         verbose=-1,
     )
