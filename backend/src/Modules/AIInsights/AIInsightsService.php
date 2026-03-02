@@ -197,4 +197,42 @@ class AIInsightsService
 
         return json_decode($response, true) ?: ['success' => false, 'error' => 'Invalid response'];
     }
+
+    /**
+     * Upload a file to the ML service (multipart form).
+     */
+    public function postFile(string $path, string $filePath, string $fieldName = 'file'): array
+    {
+        $url = $this->mlServiceUrl . $path;
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => [
+                $fieldName => new \CURLFile($filePath, 'text/csv', 'database_export.csv'),
+            ],
+            CURLOPT_TIMEOUT        => 600, // Training can take minutes
+            CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+        ]);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error    = curl_error($ch);
+        curl_close($ch);
+
+        if ($error) {
+            return ['success' => false, 'error' => 'ML service unavailable: ' . $error];
+        }
+
+        if ($httpCode !== 200) {
+            return [
+                'success' => false,
+                'error'   => "ML service returned HTTP $httpCode",
+                'details' => json_decode($response, true),
+            ];
+        }
+
+        return json_decode($response, true) ?: ['success' => false, 'error' => 'Invalid response'];
+    }
 }

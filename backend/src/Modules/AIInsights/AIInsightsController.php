@@ -164,4 +164,108 @@ class AIInsightsController
 
         return Response::success($result['data'] ?? $result);
     }
+
+    /**
+     * POST /api/v1/ai/retrain
+     * Retrain ML models using orders stored in the database.
+     *
+     * Exports all finalized orders (delivered, cancelled, returned) as a CSV,
+     * sends it to the ML service for training, and returns the results.
+     */
+    public function retrainFromDatabase(Request $request): Response
+    {
+        $storeId = $request->storeId();
+
+        // Query all orders with final statuses (needed for supervised learning)
+        $orders = $this->db->query(
+            "SELECT o.id,
+                    o.status AS order_status,
+                    o.created_at AS order_purchase_timestamp,
+                    o.total_amount AS payment_value,
+                    o.subtotal,
+                    o.shipping_cost,
+                    o.discount,
+                    o.customer_phone AS customer_unique_id,
+                    o.customer_name,
+                    o.attempt_count,
+                    w.name AS customer_state,
+                    w.shipping_zone,
+                    COUNT(oi.id) AS n_items,
+                    GROUP_CONCAT(DISTINCT p.category SEPARATOR ',') AS product_category_name
+             FROM orders o
+             LEFT JOIN wilayas w ON o.wilaya_id = w.id
+             LEFT JOIN order_items oi ON o.id = oi.order_id
+             LEFT JOIN products p ON oi.product_id = p.id
+             WHERE o.store_id = ?
+               AND o.status IN ('delivered', 'cancelled', 'returned')
+             GROUP BY o.id
+             ORDER BY o.created_at ASC",
+            [$storeId]
+        );
+
+        if (empty($orders)) {
+            return Response::error(
+                'No finalized orders found. Need delivered/cancelled/returned orders to train models. Minimum 100 orders recommended.',
+                400
+            );
+        }
+
+        if (count($orders) < 100) {
+            return Response::error(
+                'Only ' . count($orders) . ' finalized orders found. Minimum 100 orders recommended for meaningful training.',
+                400
+            );
+        }
+
+        // Map DB statuses to ML-expected statuses
+        $statusMap = [
+            'delivered'  => 'delivered',
+            'cancelled'  => 'canceled',
+            'returned'   => 'canceled',
+        ];
+
+        foreach ($orders as &$order) {
+            $order['order_status'] = $statusMap[$order['order_status']] ?? $order['order_status'];
+            // Default payment type for Algerian COD
+            $order['payment_type'] = 'cod';
+        }
+        unset($order);
+
+        // Generate CSV in temp file
+        $tmpFile = tempnam(sys_get_temp_dir(), 'crm_retrain_');
+        $csvPath = $tmpFile . '.csv';
+        rename($tmpFile, $csvPath);
+
+        $fp = fopen($csvPath, 'w');
+        if (!$fp) {
+            return Response::error('Failed to create temporary CSV file', 500);
+        }
+
+        // Write CSV header
+        $headers = array_keys($orders[0]);
+        fputcsv($fp, $headers);
+
+        // Write rows
+        foreach ($orders as $order) {
+            fputcsv($fp, array_values($order));
+        }
+        fclose($fp);
+
+        // Send CSV to ML service for training
+        $result = $this->aiService->postFile('/api/retrain/upload-and-train', $csvPath);
+
+        // Clean up temp file
+        @unlink($csvPath);
+
+        if (isset($result['success']) && $result['success'] === false) {
+            return Response::error($result['error'] ?? 'ML training failed', 503);
+        }
+
+        // Include order count context in response
+        $responseData = $result['data'] ?? $result;
+        $responseData['source'] = 'database';
+        $responseData['store_id'] = $storeId;
+
+        return Response::success($responseData);
+    }
 }

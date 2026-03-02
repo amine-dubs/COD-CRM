@@ -137,6 +137,8 @@ $router->group('/api/v1', [AuthMiddleware::class, TenantMiddleware::class], func
         $router->get('/forecast',         [AIInsightsController::class, 'forecast']);
         $router->get('/insights',         [AIInsightsController::class, 'insights']);
         $router->get('/recommendations',  [AIInsightsController::class, 'recommendations']);
+        $router->post('/retrain',         [AIInsightsController::class, 'retrainFromDatabase'],
+            [new RBACMiddleware(['owner', 'admin'])]);
     });
 });
 

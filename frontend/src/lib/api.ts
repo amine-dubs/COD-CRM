@@ -16,6 +16,9 @@ import type {
 const ML_BASE_URL =
   process.env.NEXT_PUBLIC_ML_SERVICE_URL || "http://localhost:8001";
 
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+
 async function fetchApi<T>(
   endpoint: string,
   options?: RequestInit
@@ -32,6 +35,31 @@ async function fetchApi<T>(
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(error.detail || `API error: ${res.status}`);
+  }
+  return res.json();
+}
+
+async function fetchBackendApi<T>(
+  endpoint: string,
+  options?: RequestInit
+): Promise<T> {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const headers: Record<string, string> = {};
+  if (options?.body && !(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
+  // Include auth token if available
+  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const res = await fetch(url, {
+    ...options,
+    headers: { ...headers, ...options?.headers },
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(error.message || error.detail || `API error: ${res.status}`);
   }
   return res.json();
 }
@@ -75,6 +103,12 @@ export const api = {
   restoreDefaults: () =>
     fetchApi<ApiResponse<{ models_reloaded: boolean }>>(
       "/api/retrain/restore-defaults",
+      { method: "POST" }
+    ),
+
+  retrainFromDatabase: () =>
+    fetchBackendApi<ApiResponse<RetrainingResult>>(
+      "/api/v1/ai/retrain",
       { method: "POST" }
     ),
 
