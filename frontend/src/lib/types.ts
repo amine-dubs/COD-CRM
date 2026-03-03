@@ -84,10 +84,24 @@ export interface ForecastPrediction {
   yhat_upper: number;
 }
 
+export type ForecastEventType =
+  | "ramadan_start"
+  | "eid_al_fitr"
+  | "eid_al_adha"
+  | "mawlid"
+  | "algerian_holiday";
+
+export interface EventAnnotation {
+  date: string;
+  event: ForecastEventType;
+  label: string;
+}
+
 export interface ForecastResult {
   category: string;
   periods: number;
   predictions: ForecastPrediction[];
+  event_annotations?: EventAnnotation[];
 }
 
 // === Metrics ===

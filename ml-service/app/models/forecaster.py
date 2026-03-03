@@ -282,11 +282,58 @@ class DemandForecaster:
                 "yhat_upper": round(float(pred_arr[i] + std * ci_factor), 2),
             })
 
+        # Build event annotations for chart reference lines
+        _ALGERIAN_HOLIDAY_NAMES = {
+            (1, 1): "Nouvel An",
+            (1, 12): "Yennayer",
+            (5, 1): "Fête du Travail",
+            (7, 5): "Indépendance",
+            (11, 1): "Révolution",
+        }
+        _ISLAMIC_EVENT_LABELS = {
+            "eid_al_fitr": "Aïd el-Fitr",
+            "eid_al_adha": "Aïd el-Adha",
+            "mawlid": "Mawlid",
+        }
+        event_annotations = []
+        seen_annotation_keys = set()
+        prev_ramadan = False
+        for i in range(periods):
+            dt = future_dates[i]
+            dt_norm = dt.normalize()
+            date_str = dt.strftime("%Y-%m-%d")
+
+            # Ramadan start (first day of Ramadan in forecast window)
+            is_ramadan = dt_norm in event_dates_by_type.get("ramadan", set())
+            if is_ramadan and not prev_ramadan:
+                event_annotations.append({
+                    "date": date_str, "event": "ramadan_start", "label": "Début Ramadan"
+                })
+            prev_ramadan = is_ramadan
+
+            # Islamic holidays (only first day of each event)
+            for etype, label in _ISLAMIC_EVENT_LABELS.items():
+                if dt_norm in event_dates_by_type.get(etype, set()) and etype not in seen_annotation_keys:
+                    event_annotations.append({"date": date_str, "event": etype, "label": label})
+                    seen_annotation_keys.add(etype)
+
+            # Algerian national holidays
+            md = (dt.month, dt.day)
+            if dt_norm in event_dates_by_type.get("algerian_holiday", set()):
+                name = _ALGERIAN_HOLIDAY_NAMES.get(md, "Jour Férié")
+                key = f"algerian_{md}"
+                if key not in seen_annotation_keys:
+                    event_annotations.append({
+                        "date": date_str, "event": "algerian_holiday", "label": name
+                    })
+                    seen_annotation_keys.add(key)
+
         return {
             "category": category,
             "periods": periods,
             "method": "lightgbm",
             "predictions": results,
+            "event_annotations": event_annotations,
         }
 
     @staticmethod

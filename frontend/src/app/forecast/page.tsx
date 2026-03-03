@@ -102,7 +102,7 @@ export default function ForecastPage() {
           Demand Forecast
         </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          LightGBM demand forecasting with Islamic calendar covariates
+          LightGBM demand forecasting with Algerian calendar covariates
         </p>
       </div>
 
@@ -137,6 +137,7 @@ export default function ForecastPage() {
           <ForecastLineChart
             predictions={forecast.predictions}
             category={forecast.category}
+            event_annotations={forecast.event_annotations}
           />
 
           {/* Summary stats */}
