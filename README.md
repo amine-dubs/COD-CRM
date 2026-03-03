@@ -46,7 +46,7 @@ A production-ready, multi-tenant CRM SaaS platform for Algerian COD (Cash-on-Del
 ### ML Module
 - **Order Risk Prediction** — Optimized ensemble (CatBoost + LightGBM + XGBoost + ADASYN + Optuna) with 31 features, AUC 0.9961, 98% failure recall
 - **Customer Segmentation** — HDBSCAN density-based clustering with RFM analysis (5 segments: VIP, Loyal, At Risk, Lost, Regular)
-- **Demand Forecasting** — LightGBM with 21 covariates including Algerian calendar events (Islamic: Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid, Islamic New Year; National: New Year, Yennayer, Labour Day, Independence Day, Revolution Day)
+- **Demand Forecasting** — LightGBM with 20 covariates including Algerian calendar events (Islamic: Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid; National: New Year, Yennayer, Labour Day, Independence Day, Revolution Day)
 - **AI Insights** — Google Gemini integration for multilingual business recommendations
 - **Model Retraining** — Retrain from your database with one click, or upload a custom CSV. Automatic Optuna hyperparameter optimization (40 Bayesian trials), backup and rollback
 
@@ -184,13 +184,13 @@ Benchmarked 5 covariate-aware models. LightGBM selected for best MAE and native 
 | Chronos-T5-Small (zero-shot) | 338,231 | 395,363 | +6.8% |
 | **LightGBM + lags + holidays** | **318,741** | **416,501** | **+12.2%** |
 
-**21 covariates**: Islamic events — Ramadan, Eid al-Fitr (3d), Eid al-Adha (3d), Mawlid, Islamic New Year (via `hijri-converter`); National holidays — New Year (Jan 1), Yennayer (Jan 12), Labour Day (May 1), Independence Day (Jul 5), Revolution Day (Nov 1); `is_weekend` = Fri-Sat + all holidays; day of week, month, lags (1/7/14/28), rolling statistics (mean/std at 7/14/28 days).
+**20 covariates**: Islamic events — Ramadan, Eid al-Fitr (3d), Eid al-Adha (3d), Mawlid (via `hijri-converter`); National holidays — New Year (Jan 1), Yennayer (Jan 12), Labour Day (May 1), Independence Day (Jul 5), Revolution Day (Nov 1); `is_weekend` = Fri-Sat + all holidays; day of week, month, lags (1/7/14/28), rolling statistics (mean/std at 7/14/28 days).
 
 ### Why Not Foundation Models (HuggingFace)?
 
 Foundation models like TimesFM, Chronos-Large, MOIRAI, and Lag-Llama are designed for **zero-shot forecasting** — they don't accept covariates. Our competitive advantage is **Algerian calendar-aware forecasting** (Islamic + national holidays) for Algerian e-commerce, which requires a model that supports covariates. LightGBM is the right choice because:
 
-- **Natively handles 21 covariates** (Islamic events + national holidays + calendar + lags)
+- **Natively handles 20 covariates** (Islamic events + national holidays + calendar + lags)
 - **Fast to retrain** when new data arrives (seconds vs hours for transformers)
 - **Small dataset** (714 days) favors simpler models over deep learning
 - **TFT** (the only deep learning model with covariates) needs thousands of time series to outperform LightGBM

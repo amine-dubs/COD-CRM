@@ -581,8 +581,8 @@ add_text_box(slide, Inches(0.7), Inches(4.6), Inches(5.5), Inches(0.4),
              "LightGBM + Calendrier Algerien", font_size=18, bold=True, color=DARK_BLUE)
 
 config_items = [
-    "21 features : lags(1,7,14,28), rolling stats, calendrier",
-    "Islamiques : Ramadan, Aid el-Fitr, Aid el-Adha, Mawlid, Nouvel An",
+    "20 features : lags(1,7,14,28), rolling stats, calendrier",
+    "Islamiques : Ramadan, Aid el-Fitr, Aid el-Adha, Mawlid",
     "Nationaux : 1er jan, Yennayer, 1er mai, 5 juil, 1er nov",
     "is_weekend = ven-sam + jours feries islamiques + nationaux",
     "Prevision recursive multi-step (pas de fuite)",

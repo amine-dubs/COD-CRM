@@ -974,7 +974,7 @@ LightGBM a \'{e}t\'{e} retenu car il offre le \textbf{meilleur MAE} (318~741 DZD
 
 \subsection{Ing\'{e}nierie des features temporelles}
 
-Le mod\`{e}le utilise \textbf{21 features} regroup\'{e}es en 5 cat\'{e}gories :
+Le mod\`{e}le utilise \textbf{20 features} regroup\'{e}es en 5 cat\'{e}gories :
 
 \begin{table}[H]
 \centering
@@ -988,9 +988,8 @@ Le mod\`{e}le utilise \textbf{21 features} regroup\'{e}es en 5 cat\'{e}gories :
  & is\_weekend & Jour f\'{e}ri\'{e} alg\'{e}rien (ven-sam + jours f\'{e}ri\'{e}s) \\
  & day\_of\_month, week\_of\_year & Jour du mois, semaine de l'ann\'{e}e \\
 \midrule
-\multirow{3}{*}{\'{E}v\'{e}nements islamiques (5)} & ramadan, eid\_al\_fitr & P\'{e}riode de Ramadan, f\^{e}te de l'A\"{i}d el-Fitr (3j) \\
+\multirow{2}{*}{\'{E}v\'{e}nements islamiques (4)} & ramadan, eid\_al\_fitr & P\'{e}riode de Ramadan, f\^{e}te de l'A\"{i}d el-Fitr (3j) \\
  & eid\_al\_adha, mawlid & F\^{e}te de l'A\"{i}d el-Adha (3j), Mawlid \\
- & islamic\_new\_year & Nouvel An islamique (1 Muharram) \\
 \midrule
 Jours f\'{e}ri\'{e}s nationaux (1) & algerian\_holiday & 1\textsuperscript{er} jan, Yennayer,  1\textsuperscript{er} mai, 5 juil, 1\textsuperscript{er} nov \\
 \midrule
@@ -1031,7 +1030,7 @@ Les mod\`{e}les fondamentaux de s\'{e}ries temporelles tels que TimesFM (Google)
 LightGBM est le choix optimal pour plusieurs raisons :
 
 \begin{itemize}
-  \item \textbf{Support natif des covariables} : Int\`{e}gre nativement 21 covariables (5 \'{e}v\'{e}nements islamiques + 1 jours f\'{e}ri\'{e}s nationaux + 5 features calendaires + 4 lags + 6 statistiques glissantes).
+  \item \textbf{Support natif des covariables} : Int\`{e}gre nativement 20 covariables (4 \'{e}v\'{e}nements islamiques + 1 jours f\'{e}ri\'{e}s nationaux + 5 features calendaires + 4 lags + 6 statistiques glissantes).
   \item \textbf{R\'{e}entra\^{i}nement rapide} : Quelques secondes pour s'adapter \`{a} de nouvelles donn\'{e}es, contre des heures pour un mod\`{e}le de type transformer.
   \item \textbf{Petite s\'{e}rie temporelle} : 714 jours de donn\'{e}es favorisent les mod\`{e}les simples par rapport au deep learning, qui n\'{e}cessite des milliers de s\'{e}ries temporelles pour g\'{e}n\'{e}raliser.
   \item \textbf{Alternative deep learning} : TFT (\textit{Temporal Fusion Transformer}) est le seul mod\`{e}le deep learning supportant les covariables, mais il n\'{e}cessite des milliers de s\'{e}ries temporelles pour surpasser LightGBM --- une condition non remplie par notre dataset.
@@ -1105,7 +1104,7 @@ Ce projet a permis de concevoir et de d\'{e}velopper un CRM intelligent pour le 
 
 \begin{itemize}
   \item \textbf{Donn\'{e}es r\'{e}elles} : R\'{e}entra\^{i}ner les mod\`{e}les sur les donn\'{e}es r\'{e}elles du e-commerce alg\'{e}rien pour des performances repr\'{e}sentatives.
-  \item \textbf{Saisonnalit\'{e} locale} : Le calendrier alg\'{e}rien complet est int\'{e}gr\'{e} : \'{e}v\'{e}nements islamiques (Ramadan, A\"{i}d el-Fitr, A\"{i}d el-Adha, Mawlid, Nouvel An islamique) via \texttt{hijri-converter}, et jours f\'{e}ri\'{e}s nationaux (1\textsuperscript{er} janvier, Yennayer, 1\textsuperscript{er} mai, 5 juillet, 1\textsuperscript{er} novembre). Le feature \texttt{is\_weekend} couvre aussi tous les jours ch\^{o}m\'{e}s (vendredi-samedi + jours f\'{e}ri\'{e}s). Il reste \`{a} int\'{e}grer les \'{e}v\'{e}nements commerciaux (rentr\'{e}e scolaire, promotions) pour enrichir la couverture.
+  \item \textbf{Saisonnalit\'{e} locale} : Le calendrier alg\'{e}rien complet est int\'{e}gr\'{e} : \'{e}v\'{e}nements islamiques (Ramadan, A\"{i}d el-Fitr, A\"{i}d el-Adha, Mawlid) via \texttt{hijri-converter}, et jours f\'{e}ri\'{e}s nationaux (1\textsuperscript{er} janvier, Yennayer, 1\textsuperscript{er} mai, 5 juillet, 1\textsuperscript{er} novembre). Le feature \texttt{is\_weekend} couvre aussi tous les jours ch\^{o}m\'{e}s (vendredi-samedi + jours f\'{e}ri\'{e}s). Il reste \`{a} int\'{e}grer les \'{e}v\'{e}nements commerciaux (rentr\'{e}e scolaire, promotions) pour enrichir la couverture.
   \item \textbf{Apprentissage en ligne} : Mettre \`{a} jour les mod\`{e}les en continu avec les nouvelles commandes.
   \item \textbf{A/B testing} : Mesurer l'impact r\'{e}el des recommandations ML sur le taux de livraison.
 \end{itemize}

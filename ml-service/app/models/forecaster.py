@@ -5,7 +5,7 @@ model that supports covariates:
   - Lag features (1, 7, 14, 28 days)
   - Rolling statistics (mean/std over 7, 14, 28 day windows)
   - Calendar features (day-of-week, month, weekend/holiday, etc.)
-  - Islamic events (Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid, Islamic New Year)
+  - Islamic events (Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid)
   - Algerian national holidays (New Year, Yennayer, Labour Day, Independence, Revolution)
 
 Selected after benchmarking 5 models (see benchmark_covariates.py):
@@ -77,11 +77,6 @@ def get_islamic_events(start_year: int, end_year: int) -> list[dict]:
                     if mawlid.year in range(start_year, end_year + 1):
                         events.append({"date": mawlid, "event": "mawlid"})
 
-                    # Islamic New Year: 1 Muharram
-                    islamic_ny = Hijri(hy, 1, 1).to_gregorian()
-                    if islamic_ny.year in range(start_year, end_year + 1):
-                        events.append({"date": islamic_ny, "event": "islamic_new_year"})
-
                 except (ValueError, OverflowError):
                     continue
     except ImportError:
@@ -109,14 +104,14 @@ def get_islamic_events(start_year: int, end_year: int) -> list[dict]:
 
 FEATURE_COLS = [
     "day_of_week", "month", "is_weekend", "day_of_month", "week_of_year",
-    "ramadan", "eid_al_fitr", "eid_al_adha", "mawlid", "islamic_new_year",
+    "ramadan", "eid_al_fitr", "eid_al_adha", "mawlid",
     "algerian_holiday",
     "lag_1", "lag_7", "lag_14", "lag_28",
     "rolling_mean_7", "rolling_mean_14", "rolling_mean_28",
     "rolling_std_7", "rolling_std_14", "rolling_std_28",
 ]
 
-EVENT_TYPES = ["ramadan", "eid_al_fitr", "eid_al_adha", "mawlid", "islamic_new_year", "algerian_holiday"]
+EVENT_TYPES = ["ramadan", "eid_al_fitr", "eid_al_adha", "mawlid", "algerian_holiday"]
 
 
 class DemandForecaster:
@@ -313,8 +308,6 @@ class DemandForecaster:
             elif dt_norm in event_dates_by_type.get("eid_al_adha", set()):
                 is_off = 1
             elif dt_norm in event_dates_by_type.get("mawlid", set()):
-                is_off = 1
-            elif dt_norm in event_dates_by_type.get("islamic_new_year", set()):
                 is_off = 1
             elif dt_norm in event_dates_by_type.get("algerian_holiday", set()):
                 is_off = 1

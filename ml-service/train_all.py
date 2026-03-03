@@ -628,7 +628,7 @@ def train_forecasting(df: pd.DataFrame):
 
     Features: lag(1,7,14,28), rolling stats, day-of-week, month, is_weekend
     (Fri-Sat + national + Islamic holidays),
-    Islamic events (Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid, Islamic New Year),
+    Islamic events (Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid),
     Algerian national holidays (New Year, Yennayer, Labour Day, Independence, Revolution).
     Uses recursive multi-step forecasting for evaluation.
     """
