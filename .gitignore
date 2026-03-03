@@ -43,6 +43,9 @@ desktop.ini
 coverage/
 .turbo/
 tmpclaude-*/
+docs/tmpclaude-*/
+email.md
+Untitled-1.md
 
 # === ML Service ===
 ml-service/data/olist/*.csv
