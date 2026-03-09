@@ -1,31 +1,50 @@
-import clsx from "clsx";
+import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "@/lib/utils";
+import { X } from "lucide-react";
 
-interface BadgeProps {
-  variant?: "critical" | "high" | "medium" | "low" | "success" | "info" | "default";
-  children: React.ReactNode;
-  className?: string;
+const badgeVariants = cva(
+  "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  {
+    variants: {
+      variant: {
+        default: "border-transparent bg-primary text-primary-foreground",
+        secondary: "border-transparent bg-secondary text-secondary-foreground",
+        destructive:
+          "border-transparent bg-destructive text-destructive-foreground",
+        success: "border-transparent bg-success text-success-foreground",
+        warning: "border-transparent bg-warning text-warning-foreground",
+        outline: "text-foreground",
+        muted: "border-transparent bg-muted text-muted-foreground",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  }
+);
+
+export interface BadgeProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+    VariantProps<typeof badgeVariants> {
+  onRemove?: () => void;
 }
 
-const BADGE_STYLES: Record<string, string> = {
-  critical: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-  high: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-  medium: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-  low: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-  success: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-  info: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  default: "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300",
-};
-
-export function Badge({ variant = "default", children, className }: BadgeProps) {
+function Badge({ className, variant, onRemove, children, ...props }: BadgeProps) {
   return (
-    <span
-      className={clsx(
-        "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
-        BADGE_STYLES[variant],
-        className
-      )}
-    >
+    <div className={cn(badgeVariants({ variant }), className)} {...props}>
       {children}
-    </span>
+      {onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          className="ms-1 rounded-full outline-none ring-offset-background focus:ring-2 focus:ring-ring focus:ring-offset-2"
+        >
+          <X className="h-3 w-3" />
+          <span className="sr-only">Remove</span>
+        </button>
+      )}
+    </div>
   );
 }
+
+export { Badge, badgeVariants };

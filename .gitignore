@@ -42,8 +42,8 @@ desktop.ini
 *.map
 coverage/
 .turbo/
-tmpclaude-*/
-docs/tmpclaude-*/
+tmpclaude-*
+docs/tmpclaude-*
 email.md
 Untitled-1.md
 

@@ -130,6 +130,83 @@ async def retrain_from_csv(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Retraining failed: {str(e)}")
 
 
+
+@router.post("/from-database")
+async def retrain_from_database():
+    """
+    Retrain all models using order data directly from the CRM database.
+    """
+    from app.services.data_service import data_service
+
+    try:
+        df = data_service.load_orders()
+        if df.empty or len(df) < 20:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Not enough orders in database ({len(df)}). Need at least 20.",
+            )
+        logger.info(f"Loaded {len(df)} orders from database")
+
+        df = _prepare_database_data(df)
+        logger.info(f"Prepared {len(df)} orders for training")
+
+        backup_dir = settings.MODEL_DIR / "backup"
+        backup_dir.mkdir(exist_ok=True)
+        for f in settings.MODEL_DIR.glob("*.joblib"):
+            shutil.copy2(f, backup_dir / f.name)
+        metrics_file = settings.MODEL_DIR / "metrics.json"
+        if metrics_file.exists():
+            shutil.copy2(metrics_file, backup_dir / "metrics.json")
+
+        from train_all import train_risk_ensemble, train_segmentation, train_forecasting
+        from datetime import datetime
+
+        risk_metrics = train_risk_ensemble(df)
+        seg_metrics = train_segmentation(df)
+        forecast_metrics = train_forecasting(df)
+
+        all_metrics = {
+            "trained_at": datetime.now().isoformat(),
+            "dataset": "crm_database",
+            "source_file": "MySQL cod_crm.orders",
+            "total_orders": int(len(df)),
+            "delivery_rate": round(float(df["is_delivered"].mean()), 4),
+            "risk_prediction": risk_metrics,
+            "segmentation": seg_metrics,
+            "forecasting": forecast_metrics,
+        }
+        with open(metrics_file, "w", encoding="utf-8") as f:
+            json.dump(all_metrics, f, indent=2, ensure_ascii=False)
+
+        reload_status = ml_service.reload_models()
+
+        return {
+            "success": True,
+            "message": "Models retrained from database and reloaded.",
+            "data": {
+                "orders_processed": int(len(df)),
+                "delivery_rate": all_metrics["delivery_rate"],
+                "risk_auc": risk_metrics["models"]["ensemble"]["auc_roc"],
+                "risk_f1": risk_metrics["models"]["ensemble"]["f1_score"],
+                "segments_found": seg_metrics["n_clusters"],
+                "forecast_models": len(forecast_metrics["models_trained"]),
+                "models_reloaded": reload_status,
+                "backup_location": str(backup_dir),
+            },
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Database retraining failed")
+        backup_dir = settings.MODEL_DIR / "backup"
+        if backup_dir.exists():
+            for f in backup_dir.glob("*.joblib"):
+                shutil.copy2(f, settings.MODEL_DIR / f.name)
+            ml_service.reload_models()
+        raise HTTPException(status_code=500, detail=f"Retraining failed: {str(e)}")
+
+
 @router.post("/restore-defaults")
 def restore_default_models():
     """Restore backed-up models (e.g. revert to Olist-trained defaults)."""
@@ -341,3 +418,73 @@ def _prepare_custom_data(df: pd.DataFrame) -> pd.DataFrame:
 
     logger.info(f"Custom data prepared: {len(df)} orders, delivery rate: {df['is_delivered'].mean():.1%}")
     return df
+
+
+def _prepare_database_data(df: pd.DataFrame) -> pd.DataFrame:
+    """Transform CRM database orders into the format expected by the training pipeline."""
+    import numpy as np
+
+    # Map CRM status to training format
+    df["order_status"] = df["status"].str.lower().str.strip()
+    delivered_keywords = ["delivered", "livree", "livré"]
+    df["is_delivered"] = df["order_status"].apply(
+        lambda s: 1 if any(k in str(s) for k in delivered_keywords) else 0
+    )
+
+    # Date columns
+    df["order_date"] = pd.to_datetime(df["created_at"], errors="coerce")
+
+    # Amount columns - already present from CRM
+    df["total_amount"] = pd.to_numeric(df["total_amount"], errors="coerce").fillna(0)
+    df["subtotal"] = pd.to_numeric(df["subtotal"], errors="coerce").fillna(df["total_amount"])
+    df["shipping_cost"] = pd.to_numeric(df["shipping_cost"], errors="coerce").fillna(400)
+
+    # Customer identifier - use phone as unique ID
+    df["customer_unique_id"] = df["customer_phone"].astype(str)
+
+    # Region / wilaya
+    df["customer_state"] = df.get("wilaya_name", pd.Series("default", index=df.index)).fillna("default").astype(str)
+
+    # Product category from product_names
+    df["product_category"] = df.get("product_names", pd.Series("unknown", index=df.index)).fillna("unknown").astype(str)
+    df["product_category"] = df["product_category"].apply(lambda x: x.split(",")[0].strip() if x != "unknown" else x)
+
+    # Items count
+    df["n_items"] = pd.to_numeric(df.get("n_items", 1), errors="coerce").fillna(1).astype(int)
+
+    # Defaults for features not available in CRM schema
+    df["avg_product_weight"] = 1.0
+    df["estimated_delivery_days"] = 7
+    df["has_boleto"] = 0
+    df["has_credit_card"] = 0
+    df["has_voucher"] = 0
+    df["has_debit_card"] = 0
+    df["n_payment_methods"] = 1
+    df["max_installments"] = 1
+    df["avg_photos"] = 1
+    df["avg_desc_length"] = 500
+    df["avg_name_length"] = 30
+    df["avg_volume"] = 10000
+    df["seller_customer_same_state"] = 0
+    df["n_sellers"] = 1
+
+    # Order ID
+    if "order_id" not in df.columns:
+        df["order_id"] = df["id"] if "id" in df.columns else range(len(df))
+
+    # Customer history
+    df = df.sort_values("order_date")
+    cust_stats = df[df["is_delivered"] == 1].groupby("customer_unique_id").agg(
+        customer_order_count=("order_id", "count"),
+        customer_total_spent=("total_amount", "sum"),
+    ).reset_index()
+    df = df.merge(cust_stats, on="customer_unique_id", how="left")
+    df["customer_order_count"] = df["customer_order_count"].fillna(0).astype(int)
+    df["customer_total_spent"] = df["customer_total_spent"].fillna(0)
+    df["is_repeat_customer"] = (df["customer_order_count"] > 1).astype(int)
+
+    df.dropna(subset=["order_date"], inplace=True)
+
+    logger.info(f"Database data prepared: {len(df)} orders, delivery rate: {df['is_delivered'].mean():.1%}")
+    return df
+

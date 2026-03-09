@@ -1,33 +1,89 @@
-import clsx from "clsx";
+import { cn } from "@/lib/utils";
+import type { ReactNode } from "react";
 
-interface CardProps {
-  title?: string;
-  subtitle?: string;
-  children: React.ReactNode;
-  className?: string;
+/* ═══════════════════════════════════════════════════════════
+   Card Component System
+   ═══════════════════════════════════════════════════════════ */
+
+interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
+  children: ReactNode;
 }
 
-export function Card({ title, subtitle, children, className }: CardProps) {
+function Card({ className, children, ...props }: CardProps) {
   return (
     <div
-      className={clsx(
-        "bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6",
+      className={cn(
+        "rounded-lg border border-border bg-card text-card-foreground shadow-sm",
         className
       )}
+      {...props}
     >
-      {title && (
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            {title}
-          </h3>
-          {subtitle && (
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              {subtitle}
-            </p>
-          )}
-        </div>
-      )}
       {children}
     </div>
   );
 }
+
+function CardHeader({ className, children, ...props }: CardProps) {
+  return (
+    <div
+      className={cn("flex flex-col space-y-1.5 p-6", className)}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+}
+
+function CardTitle({
+  className,
+  children,
+  ...props
+}: React.HTMLAttributes<HTMLHeadingElement>) {
+  return (
+    <h3
+      className={cn(
+        "text-lg font-semibold leading-none tracking-tight",
+        className
+      )}
+      {...props}
+    >
+      {children}
+    </h3>
+  );
+}
+
+function CardDescription({
+  className,
+  children,
+  ...props
+}: React.HTMLAttributes<HTMLParagraphElement>) {
+  return (
+    <p
+      className={cn("text-sm text-muted-foreground", className)}
+      {...props}
+    >
+      {children}
+    </p>
+  );
+}
+
+function CardContent({ className, children, ...props }: CardProps) {
+  return (
+    <div className={cn("p-6 pt-0", className)} {...props}>
+      {children}
+    </div>
+  );
+}
+
+function CardFooter({ className, children, ...props }: CardProps) {
+  return (
+    <div
+      className={cn("flex items-center p-6 pt-0", className)}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+}
+
+export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter };
