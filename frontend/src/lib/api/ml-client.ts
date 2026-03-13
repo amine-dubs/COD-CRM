@@ -80,6 +80,9 @@ export const mlApi = {
       `/api/forecast/demand?category=${category}&periods=${periods}`
     ),
 
+  getForecastCategories: () =>
+    fetchMl<AiApiResponse<{ categories: string[] }>>("/api/forecast/categories"),
+
   getMetrics: () =>
     fetchMl<AiApiResponse<TrainingMetrics>>("/api/retrain/metrics"),
 
@@ -94,12 +97,6 @@ export const mlApi = {
       { method: "POST", body: formData, headers: {} }
     );
   },
-
-  restoreDefaults: () =>
-    fetchMl<AiApiResponse<{ models_reloaded: boolean }>>(
-      "/api/retrain/restore-defaults",
-      { method: "POST" }
-    ),
 
   retrainFromDatabase: () =>
     fetchMl<AiApiResponse<RetrainingResult>>("/api/retrain/from-database", {

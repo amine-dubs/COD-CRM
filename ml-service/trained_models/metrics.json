@@ -1,93 +1,94 @@
 {
-  "trained_at": "2026-03-02T15:20:08.990224",
-  "dataset": "olist_brazilian_ecommerce",
-  "total_orders": 99441,
-  "delivery_rate": 0.9702,
+  "trained_at": "2026-03-13T19:16:31.141651",
+  "dataset": "crm_database",
+  "source_file": "MySQL cod_crm.orders",
+  "total_orders": 6072,
+  "delivery_rate": 0.8427,
   "risk_prediction": {
     "models": {
       "catboost": {
-        "auc_roc": 0.9957029964885424,
-        "accuracy": 0.9997441539170036,
-        "precision": 0.9997409460649708,
+        "auc_roc": 0.6170030959109043,
+        "accuracy": 0.8457095709570958,
+        "precision": 0.8455821635012386,
         "recall": 1.0,
-        "f1_score": 0.9998704562530767
+        "f1_score": 0.916331096196868
       },
       "lightgbm": {
-        "auc_roc": 0.9974134053081422,
-        "accuracy": 0.9997441539170036,
-        "precision": 0.9997409460649708,
-        "recall": 1.0,
-        "f1_score": 0.9998704562530767
+        "auc_roc": 0.6505204870345744,
+        "accuracy": 0.8498349834983498,
+        "precision": 0.8514190317195326,
+        "recall": 0.99609375,
+        "f1_score": 0.918091809180918
       },
       "xgboost": {
-        "auc_roc": 0.9966580726596438,
-        "accuracy": 0.9996418154838049,
-        "precision": 0.9997409192186124,
-        "recall": 0.9998963515754561,
-        "f1_score": 0.9998186293561342
+        "auc_roc": 0.6134163065159575,
+        "accuracy": 0.8481848184818482,
+        "precision": 0.8505843071786311,
+        "recall": 0.9951171875,
+        "f1_score": 0.9171917191719172
       },
       "ensemble": {
-        "auc_roc": 0.9960836002175358,
-        "accuracy": 0.9997441539170036,
-        "precision": 0.9997409460649708,
-        "recall": 1.0,
-        "f1_score": 0.9998704562530767
+        "auc_roc": 0.6412431432845744,
+        "accuracy": 0.6320132013201321,
+        "precision": 0.9036312849162011,
+        "recall": 0.6318359375,
+        "f1_score": 0.7436781609195402
       }
     },
-    "optimal_threshold": 0.9804995093807048,
+    "optimal_threshold": 0.7631935224834043,
     "ensemble_weights": {
-      "catboost": 0.33303615540085335,
-      "lightgbm": 0.3336082416348529,
-      "xgboost": 0.3333556029642938
+      "catboost": 0.3280291408395666,
+      "lightgbm": 0.34584863167575014,
+      "xgboost": 0.3261222274846832
     },
     "confusion_matrix_default": {
       "threshold": 0.5,
-      "tn": 242,
-      "fp": 5,
-      "fn": 0,
-      "tp": 19296
+      "tn": 6,
+      "fp": 182,
+      "fn": 1,
+      "tp": 1023
     },
     "confusion_matrix_optimal": {
-      "threshold": 0.9804995093807048,
-      "tn": 242,
-      "fp": 5,
-      "fn": 0,
-      "tp": 19296
+      "threshold": 0.7631935224834043,
+      "tn": 119,
+      "fp": 69,
+      "fn": 377,
+      "tp": 647
     },
     "per_class_metrics": {
       "at_default_050": {
         "failed": {
-          "precision": 1.0,
-          "recall": 0.9798,
-          "f1": 0.9898
+          "precision": 0.8571,
+          "recall": 0.0319,
+          "f1": 0.0615
         },
         "delivered": {
-          "precision": 0.9997,
-          "recall": 1.0,
-          "f1": 0.9999
+          "precision": 0.849,
+          "recall": 0.999,
+          "f1": 0.9179
         }
       },
       "at_optimal": {
         "failed": {
-          "precision": 1.0,
-          "recall": 0.9798,
-          "f1": 0.9898
+          "precision": 0.2399,
+          "recall": 0.633,
+          "f1": 0.348
         },
         "delivered": {
-          "precision": 0.9997,
-          "recall": 1.0,
-          "f1": 0.9999
+          "precision": 0.9036,
+          "recall": 0.6318,
+          "f1": 0.7437
         }
       }
     },
     "dataset": {
-      "total_samples": 97712,
-      "train_samples": 100312,
-      "test_samples": 19543,
-      "positive_rate": 0.9873710496151957,
-      "original_orders": 99441,
-      "clean_orders": 97712,
-      "failure_rate": 0.012628950384804272
+      "total_samples": 6056,
+      "train_samples": 5415,
+      "test_samples": 1212,
+      "positive_rate": 0.8449471598414795,
+      "original_orders": 6072,
+      "clean_orders": 6056,
+      "failure_rate": 0.1550528401585205
     },
     "features": [
       "hour_of_day",
@@ -125,70 +126,69 @@
     "optimizations": {
       "target": "clean (delivered vs canceled/unavailable)",
       "resampling": "ADASYN ratio=0.3",
-      "hyperparameters": "Optuna-tuned (80 trials)",
-      "n_features": 31
+      "hyperparameters": "Optuna-tuned (auto)",
+      "n_features": 31,
+      "lgbm_params": {
+        "n_estimators": 338,
+        "max_depth": 12,
+        "learning_rate": 0.018793369894368753,
+        "num_leaves": 24,
+        "subsample": 0.9212259110892639,
+        "colsample_bytree": 0.9445657961599666,
+        "min_child_samples": 5,
+        "reg_alpha": 2.75434498414007e-08,
+        "reg_lambda": 0.00045709646787099503
+      }
     }
   },
   "segmentation": {
-    "algorithm": "HDBSCAN",
-    "n_clusters": 5,
-    "total_customers": 96096,
+    "algorithm": "KMeans",
+    "n_clusters": 3,
+    "total_customers": 400,
+    "silhouette_score": 0.485,
+    "davies_bouldin_score": 0.7992,
     "segments": {
-      "Segment 4": {
-        "count": 88994,
-        "percentage": 92.6,
-        "avg_recency": 286.2,
-        "avg_frequency": 1.0,
-        "avg_monetary": 3459.49
-      },
-      "At Risk": {
-        "count": 2736,
-        "percentage": 2.8,
-        "avg_recency": 271.0,
-        "avg_frequency": 2.0,
-        "avg_monetary": 7681.99
-      },
-      "Lost": {
-        "count": 441,
-        "percentage": 0.5,
-        "avg_recency": 700.6,
-        "avg_frequency": 1.0,
-        "avg_monetary": 6515.23
-      },
-      "VIP": {
-        "count": 3673,
-        "percentage": 3.8,
-        "avg_recency": 316.2,
-        "avg_frequency": 1.0,
-        "avg_monetary": 26364.9
+      "Regular": {
+        "count": 60,
+        "percentage": 15.0,
+        "avg_recency": 147.0,
+        "avg_frequency": 11.2,
+        "avg_monetary": 152307.85
       },
       "Loyal": {
-        "count": 252,
-        "percentage": 0.3,
-        "avg_recency": 246.5,
-        "avg_frequency": 3.38,
-        "avg_monetary": 14428.64
+        "count": 320,
+        "percentage": 80.0,
+        "avg_recency": 30.5,
+        "avg_frequency": 13.95,
+        "avg_monetary": 204861.24
+      },
+      "VIP": {
+        "count": 20,
+        "percentage": 5.0,
+        "avg_recency": 50.0,
+        "avg_frequency": 46.85,
+        "avg_monetary": 677571.4
       }
     }
   },
   "forecasting": {
     "models_trained": [
       "all",
-      "bed_bath_table",
-      "health_beauty",
-      "sports_leisure"
+      "Accessories",
+      "Electronics",
+      "Clothing"
     ],
     "method": "lightgbm",
     "lightgbm": {
-      "mae": 318741.13,
-      "rmse": 416501.14
+      "mae": 40584.88,
+      "rmse": 52978.51
     },
     "baseline_moving_avg": {
-      "mae": 363075.07,
-      "rmse": 466569.89
+      "mae": 43335.63,
+      "rmse": 53097.92
     },
-    "improvement_mae_pct": 12.2,
-    "time_series_days": 714,
+    "improvement_mae_pct": 6.3,
+    "time_series_days": 802,
     "test_days": 30,
     "features": [
       "day_of_week",
@@ -200,6 +200,7 @@
       "eid_al_fitr",
       "eid_al_adha",
       "mawlid",
+      "algerian_holiday",
       "lag_1",
       "lag_7",
       "lag_14",
@@ -215,7 +216,8 @@
       "ramadan",
       "eid_al_fitr",
       "eid_al_adha",
-      "mawlid"
+      "mawlid",
+      "algerian_holiday"
     ]
   }
 }

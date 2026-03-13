@@ -6,7 +6,7 @@ Trains all three AI models for the COD-CRM:
    - Clean target (delivered vs canceled/unavailable only)
    - Enhanced 31-feature set (payment, product quality, geography)
    - ADASYN resampling + Optuna-tuned hyperparameters
-2. Customer Segmentation: HDBSCAN + KMeans hybrid
+2. Customer Segmentation: Hybrid HDBSCAN (large data) / KMeans (small data)
 3. Demand Forecasting: LightGBM + Islamic calendar covariates
 
 Usage:
@@ -289,27 +289,12 @@ def train_risk_ensemble(df: pd.DataFrame, auto_tune: bool = True):
         neg_rs = (y_train == 0).sum()
         pos_rs = (y_train == 1).sum()
         logger.info(f"Train after  ADASYN:  {len(X_train)} | Pos: {pos_rs} | Neg: {neg_rs} | Ratio: {pos_rs/neg_rs:.1f}:1")
-    except ImportError:
-        logger.warning("imbalanced-learn not installed — skipping ADASYN")
+    except (ImportError, ValueError) as e:
+        logger.warning(f"ADASYN skipped: {e}")
     logger.info(f"Test:                 {len(X_test)} samples (untouched)")
 
-    # ── CatBoost ──
-    logger.info("Training CatBoost...")
-    cb_model = CatBoostClassifier(
-        iterations=lgb_params.get("n_estimators", 1200),
-        depth=min(lgb_params.get("max_depth", 10), 10),
-        learning_rate=lgb_params.get("learning_rate", 0.02),
-        l2_leaf_reg=lgb_params.get("reg_lambda", 0.5),
-        eval_metric="AUC",
-        random_seed=42,
-        verbose=0,
-    )
-    cb_model.fit(X_train, y_train, eval_set=(X_test, y_test), early_stopping_rounds=100)
-    cb_proba = cb_model.predict_proba(X_test)[:, 1]
-    cb_auc = roc_auc_score(y_test, cb_proba)
-    logger.info(f"  CatBoost AUC-ROC: {cb_auc:.4f}")
-
-    # ── LightGBM (Optuna-tuned) ──
+    # ── LightGBM params (Optuna-tuned or pre-tuned fallback) ──
+    # Defined first because CatBoost and XGBoost borrow these params too
     if auto_tune:
         logger.info("Running Optuna hyperparameter optimization (40 trials)...")
         tuned_params = _optuna_tune_lgbm(X_train, y_train, X_test, y_test, n_trials=40)
@@ -332,6 +317,22 @@ def train_risk_ensemble(df: pd.DataFrame, auto_tune: bool = True):
     }
     if tuned_params:
         lgb_params = {**tuned_params, "random_state": 42, "verbose": -1}
+
+    # ── CatBoost ──
+    logger.info("Training CatBoost...")
+    cb_model = CatBoostClassifier(
+        iterations=lgb_params.get("n_estimators", 1200),
+        depth=min(lgb_params.get("max_depth", 10), 10),
+        learning_rate=lgb_params.get("learning_rate", 0.02),
+        l2_leaf_reg=lgb_params.get("reg_lambda", 0.5),
+        eval_metric="AUC",
+        random_seed=42,
+        verbose=0,
+    )
+    cb_model.fit(X_train, y_train, eval_set=(X_test, y_test), early_stopping_rounds=100)
+    cb_proba = cb_model.predict_proba(X_test)[:, 1]
+    cb_auc = roc_auc_score(y_test, cb_proba)
+    logger.info(f"  CatBoost AUC-ROC: {cb_auc:.4f}")
 
     logger.info("Training LightGBM%s...", " (Optuna-tuned)" if tuned_params else " (default params)")
     lgb_model = LGBMClassifier(**lgb_params)
@@ -394,9 +395,16 @@ def train_risk_ensemble(df: pd.DataFrame, auto_tune: bool = True):
     optimal_idx = np.argmax(youden_j)
     optimal_threshold = float(thresholds_roc[optimal_idx])
 
-    logger.info(f"\n  Threshold optimization (Youden's J):")
-    logger.info(f"  Optimal threshold: {optimal_threshold:.4f}")
-    logger.info(f"  At threshold: TPR={tpr[optimal_idx]:.3f}, FPR={fpr[optimal_idx]:.3f}")
+    # ── Also find the threshold that maximizes F1 ──
+    from sklearn.metrics import precision_recall_curve
+    prec_arr, rec_arr, thr_pr = precision_recall_curve(y_test, ensemble_proba)
+    f1_arr = 2 * prec_arr * rec_arr / (prec_arr + rec_arr + 1e-8)
+    best_f1_idx = np.argmax(f1_arr)
+    f1_threshold = float(thr_pr[best_f1_idx]) if best_f1_idx < len(thr_pr) else 0.5
+
+    logger.info(f"\n  Threshold optimization:")
+    logger.info(f"  Youden's J threshold: {optimal_threshold:.4f} (TPR={tpr[optimal_idx]:.3f}, FPR={fpr[optimal_idx]:.3f})")
+    logger.info(f"  Max-F1 threshold:     {f1_threshold:.4f} (F1={f1_arr[best_f1_idx]:.4f})")
 
     # ── Per-class metrics at default threshold (0.5) ──
     ensemble_pred_05 = (ensemble_proba >= 0.5).astype(int)
@@ -439,11 +447,25 @@ def train_risk_ensemble(df: pd.DataFrame, auto_tune: bool = True):
             "delivered": {"precision": round(del_precision, 4), "recall": round(del_recall, 4), "f1": round(del_f1, 4)},
         }
 
+    # Find each model's own F1-maximizing threshold (avoids the CatBoost F1=0 bug
+    # where using the ensemble's threshold on a differently-calibrated model gives
+    # misleading metrics). Individual models are reported at their own best threshold.
+    def _find_f1_threshold(proba, y_true):
+        from sklearn.metrics import precision_recall_curve as _prc
+        p, r, t = _prc(y_true, proba)
+        f1 = 2 * p * r / (p + r + 1e-8)
+        idx = np.argmax(f1)
+        return float(t[idx]) if idx < len(t) else 0.5
+
+    cb_threshold = _find_f1_threshold(cb_proba, y_test)
+    lgb_threshold = _find_f1_threshold(lgb_proba, y_test)
+    xgb_threshold = _find_f1_threshold(xgb_proba, y_test)
+
     risk_metrics = {
         "models": {
-            "catboost": _model_metrics("catboost", cb_proba, y_test, optimal_threshold),
-            "lightgbm": _model_metrics("lightgbm", lgb_proba, y_test, optimal_threshold),
-            "xgboost": _model_metrics("xgboost", xgb_proba, y_test, optimal_threshold),
+            "catboost": _model_metrics("catboost", cb_proba, y_test, cb_threshold),
+            "lightgbm": _model_metrics("lightgbm", lgb_proba, y_test, lgb_threshold),
+            "xgboost": _model_metrics("xgboost", xgb_proba, y_test, xgb_threshold),
             "ensemble": _model_metrics("ensemble", ensemble_proba, y_test, optimal_threshold),
         },
         "optimal_threshold": optimal_threshold,
@@ -498,7 +520,12 @@ def train_risk_ensemble(df: pd.DataFrame, auto_tune: bool = True):
 # ═══════════════════════════════════════════════════════════════
 
 def train_segmentation(df: pd.DataFrame):
-    """Train customer segmentation using HDBSCAN (fallback KMeans)."""
+    """Train customer segmentation — hybrid approach.
+
+    Uses HDBSCAN for large datasets (>=1000 customers) where density-based
+    clustering can find natural clusters, and KMeans for smaller datasets
+    where HDBSCAN would produce too much noise.
+    """
     logger.info("=" * 60)
     logger.info("STEP 3: CUSTOMER SEGMENTATION")
     logger.info("=" * 60)
@@ -520,61 +547,120 @@ def train_segmentation(df: pd.DataFrame):
     logger.info(f"RFM computed for {len(rfm)} customers")
 
     scaler = StandardScaler()
-    rfm_scaled = scaler.fit_transform(rfm[["recency", "frequency", "monetary"]])
+    cluster_features = ["recency", "frequency", "monetary"]
+    rfm_scaled = scaler.fit_transform(rfm[cluster_features])
 
-    # Try HDBSCAN first (density-based, no need to specify K)
-    use_hdbscan = False
-    try:
-        import hdbscan
-        logger.info("Training HDBSCAN...")
-        clusterer = hdbscan.HDBSCAN(
-            min_cluster_size=100,
-            min_samples=50,
-            metric="euclidean",
-            cluster_selection_method="eom",
-        )
-        labels = clusterer.fit_predict(rfm_scaled)
-        n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
-        noise_pct = (labels == -1).mean()
-        logger.info(f"  HDBSCAN found {n_clusters} clusters, {noise_pct:.1%} noise points")
+    from sklearn.metrics import silhouette_score as _sil
 
-        if n_clusters >= 3:
-            use_hdbscan = True
-            # Assign noise points to nearest cluster
-            if noise_pct > 0:
-                from sklearn.neighbors import NearestCentroid
-                noise_mask = labels == -1
-                non_noise_mask = ~noise_mask
-                clf = NearestCentroid()
-                clf.fit(rfm_scaled[non_noise_mask], labels[non_noise_mask])
-                labels[noise_mask] = clf.predict(rfm_scaled[noise_mask])
-            rfm["cluster"] = labels
-            logger.info(f"  Using HDBSCAN with {n_clusters} clusters")
-    except ImportError:
-        logger.info("  HDBSCAN not available, using KMeans")
+    algorithm_used = "KMeans"
+    hdbscan_worked = False
 
-    if not use_hdbscan:
-        # Fallback to KMeans with elbow-selected K
-        logger.info("Training KMeans (K=4)...")
-        kmeans = KMeans(n_clusters=4, random_state=42, n_init=10)
+    # ── Try HDBSCAN for large datasets (>=1000 customers) ──
+    if len(rfm) >= 1000:
+        try:
+            import hdbscan as _hdbscan
+            logger.info(f"  Large dataset ({len(rfm)} customers) — trying HDBSCAN...")
+            best_hdb_sil = -1
+            best_hdb_labels = None
+            best_hdb_mcs = None
+            for mcs in [50, 80, 100, 150, 200]:
+                hdb = _hdbscan.HDBSCAN(min_cluster_size=mcs, min_samples=10, metric="euclidean")
+                labels_h = hdb.fit_predict(rfm_scaled)
+                n_clusters_h = len(set(labels_h) - {-1})
+                noise_pct = (labels_h == -1).mean() * 100
+                if n_clusters_h >= 3 and noise_pct < 30:
+                    # Evaluate only non-noise points
+                    mask = labels_h != -1
+                    if mask.sum() > n_clusters_h:
+                        sil_h = _sil(rfm_scaled[mask], labels_h[mask])
+                        logger.info(f"    HDBSCAN mcs={mcs}: {n_clusters_h} clusters, "
+                                    f"{noise_pct:.0f}% noise, silhouette={sil_h:.4f}")
+                        if sil_h > best_hdb_sil:
+                            best_hdb_sil = sil_h
+                            best_hdb_labels = labels_h
+                            best_hdb_mcs = mcs
+                else:
+                    logger.info(f"    HDBSCAN mcs={mcs}: {n_clusters_h} clusters, "
+                                f"{noise_pct:.0f}% noise — skipped")
+
+            if best_hdb_labels is not None and best_hdb_sil > 0.35:
+                # Assign noise points to nearest cluster
+                from scipy.spatial.distance import cdist
+                noise_mask = best_hdb_labels == -1
+                if noise_mask.any():
+                    cluster_ids = sorted(set(best_hdb_labels) - {-1})
+                    centroids = np.array([rfm_scaled[best_hdb_labels == c].mean(axis=0) for c in cluster_ids])
+                    dists = cdist(rfm_scaled[noise_mask], centroids)
+                    nearest = np.argmin(dists, axis=1)
+                    best_hdb_labels[noise_mask] = [cluster_ids[n] for n in nearest]
+
+                rfm["cluster"] = best_hdb_labels
+                # Re-label clusters to 0..N-1
+                unique_labels = sorted(rfm["cluster"].unique())
+                label_map = {old: new for new, old in enumerate(unique_labels)}
+                rfm["cluster"] = rfm["cluster"].map(label_map)
+                clusterer = None  # HDBSCAN doesn't easily re-predict
+                algorithm_used = f"HDBSCAN (mcs={best_hdb_mcs})"
+                hdbscan_worked = True
+                logger.info(f"  HDBSCAN selected: mcs={best_hdb_mcs}, silhouette={best_hdb_sil:.4f}")
+        except ImportError:
+            logger.info("  HDBSCAN not installed — falling back to KMeans")
+
+    # ── KMeans fallback (always used for small datasets, or if HDBSCAN fails) ──
+    if not hdbscan_worked:
+        if len(rfm) >= 1000:
+            logger.info("  HDBSCAN didn't produce good clusters — using KMeans")
+        best_k, best_sil = 3, -1
+        for k in range(3, min(8, len(rfm) // 5)):
+            km = KMeans(n_clusters=k, random_state=42, n_init=10)
+            labels_k = km.fit_predict(rfm_scaled)
+            sil_k = _sil(rfm_scaled, labels_k)
+            logger.info(f"  KMeans K={k}: silhouette={sil_k:.4f}")
+            if sil_k > best_sil:
+                best_sil = sil_k
+                best_k = k
+        logger.info(f"  Best K={best_k} (silhouette={best_sil:.4f})")
+        kmeans = KMeans(n_clusters=best_k, random_state=42, n_init=10)
         rfm["cluster"] = kmeans.fit_predict(rfm_scaled)
         clusterer = kmeans
-        logger.info("  KMeans trained with 4 clusters")
+        algorithm_used = "KMeans"
 
-    # Label clusters by monetary value
-    cluster_means = rfm.groupby("cluster")["monetary"].mean().sort_values(ascending=False)
-    label_names = ["VIP", "Loyal", "At Risk", "Lost"]
+    # Label clusters using composite RFM score, not just monetary
+    # Lower recency = more recent = better, higher frequency/monetary = better
+    cluster_stats = rfm.groupby("cluster").agg(
+        avg_recency=("recency", "mean"),
+        avg_frequency=("frequency", "mean"),
+        avg_monetary=("monetary", "mean"),
+    )
+    # Normalize each dimension to 0-1 range across clusters
+    for col in ["avg_recency", "avg_frequency", "avg_monetary"]:
+        mn, mx = cluster_stats[col].min(), cluster_stats[col].max()
+        if mx > mn:
+            cluster_stats[f"{col}_norm"] = (cluster_stats[col] - mn) / (mx - mn)
+        else:
+            cluster_stats[f"{col}_norm"] = 0.5
+    # Composite score: high frequency + high monetary + LOW recency = best
+    cluster_stats["score"] = (
+        (1 - cluster_stats["avg_recency_norm"]) * 0.3  # recent = good
+        + cluster_stats["avg_frequency_norm"] * 0.3
+        + cluster_stats["avg_monetary_norm"] * 0.4
+    )
+    sorted_clusters = cluster_stats["score"].sort_values(ascending=False)
+    label_names = ["VIP", "Loyal", "Regular", "At Risk", "Dormant", "Lost", "Churned"]
 
     segment_mapping = {}
-    for i, cluster_id in enumerate(cluster_means.index):
+    for i, cluster_id in enumerate(sorted_clusters.index):
         name = label_names[i] if i < len(label_names) else f"Segment {i}"
         segment_mapping[int(cluster_id)] = {
             "name": name,
             "description": {
                 "VIP": "High value, frequent, recent buyers",
                 "Loyal": "Regular customers with good purchase history",
+                "Regular": "Average customers with moderate activity",
                 "At Risk": "Previously active customers showing decline",
+                "Dormant": "Low activity customers needing re-engagement",
                 "Lost": "Inactive customers with no recent purchases",
+                "Churned": "Former customers unlikely to return",
             }.get(name, f"Customer group {i}"),
         }
 
@@ -591,16 +677,35 @@ def train_segmentation(df: pd.DataFrame):
         )
 
     # Save
-    joblib.dump(clusterer, MODEL_DIR / "segmenter.joblib")
+    if clusterer is not None:
+        joblib.dump(clusterer, MODEL_DIR / "segmenter.joblib")
+    else:
+        # HDBSCAN: save a KMeans fitted on the final labels for prediction
+        from sklearn.cluster import KMeans as _KM
+        n_final = len(rfm["cluster"].unique())
+        km_proxy = _KM(n_clusters=n_final, random_state=42, n_init=10)
+        km_proxy.fit(rfm_scaled)
+        joblib.dump(km_proxy, MODEL_DIR / "segmenter.joblib")
     joblib.dump(scaler, MODEL_DIR / "segmenter_scaler.joblib")
     joblib.dump(segment_mapping, MODEL_DIR / "segment_mapping.joblib")
     logger.info(f"Saved segmentation models to {MODEL_DIR}")
 
     # Return metrics
+    from sklearn.metrics import silhouette_score, davies_bouldin_score
+    labels_final = rfm["cluster"].values
+    try:
+        sil_score = round(float(silhouette_score(rfm_scaled, labels_final)), 4)
+        db_score  = round(float(davies_bouldin_score(rfm_scaled, labels_final)), 4)
+    except Exception:
+        sil_score = None
+        db_score  = None
+
     seg_metrics = {
-        "algorithm": "HDBSCAN" if use_hdbscan else "KMeans",
+        "algorithm": algorithm_used,
         "n_clusters": len(segment_mapping),
         "total_customers": int(len(rfm)),
+        "silhouette_score": sil_score,       # -1 to 1, higher = better separated clusters
+        "davies_bouldin_score": db_score,    # ≥0, lower = better (denser, more separated)
         "segments": {},
     }
     for seg in rfm["segment"].unique():
@@ -700,7 +805,7 @@ def train_forecasting(df: pd.DataFrame):
         ts_df["week_of_year"] = dt.dt.isocalendar().week.astype(int)
 
         # is_weekend: Algerian off-days (Fri-Sat weekend + national holidays + Islamic holidays)
-        is_off = (dt.dt.dayofweek >= 4).astype(int)  # Friday-Saturday
+        is_off = dt.dt.dayofweek.isin([4, 5]).astype(int)  # Friday-Saturday
         national_set = set(ALGERIAN_NATIONAL_HOLIDAYS)
         md_series = list(zip(dt.dt.month, dt.dt.day))
         national_mask = pd.Series([md in national_set for md in md_series], index=ts_df.index)

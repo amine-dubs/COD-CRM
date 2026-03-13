@@ -7,9 +7,11 @@ import { ForecastLineChart } from "@/components/ai/ForecastLineChart";
 import { ForecastControls } from "@/components/ai/ForecastControls";
 import { AiCard } from "@/components/ai/AiCard";
 import { mlApi } from "@/lib/api/ml-client";
+import { useI18n } from "@/providers/i18n-provider";
 import type { ForecastResult } from "@/types/ai";
 
 export default function ForecastPage() {
+  const { t } = useI18n();
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [periods, setPeriods] = useState(30);
@@ -18,6 +20,10 @@ export default function ForecastPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    mlApi
+      .getForecastCategories()
+      .then((res) => setCategories(res.data.categories))
+      .catch(() => {});
     mlApi
       .getForecast("all", 30)
       .then((res) => setForecast(res.data))
@@ -31,7 +37,7 @@ export default function ForecastPage() {
       const res = await mlApi.getForecast(selectedCategory, periods);
       setForecast(res.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Forecast failed");
+      setError(err instanceof Error ? err.message : t("ai.forecast_failed"));
     } finally {
       setLoading(false);
     }
@@ -50,9 +56,9 @@ export default function ForecastPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Demand Forecast</h1>
+        <h1 className="text-2xl font-bold text-foreground">{t("ai.forecast_title")}</h1>
         <p className="text-sm text-muted-foreground">
-          LightGBM demand forecasting with Algerian calendar covariates
+          {t("ai.forecast_subtitle")}
         </p>
       </div>
 
@@ -86,9 +92,9 @@ export default function ForecastPage() {
               {stats && (
                 <div className="grid grid-cols-3 gap-4">
                   {[
-                    { label: "Avg Daily Demand", value: stats.avg },
-                    { label: "Min Daily Demand", value: stats.min },
-                    { label: "Max Daily Demand", value: stats.max },
+                    { label: t("ai.forecast_avg_daily"), value: stats.avg },
+                    { label: t("ai.forecast_min_daily"), value: stats.min },
+                    { label: t("ai.forecast_max_daily"), value: stats.max },
                   ].map(({ label, value }) => (
                     <AiCard key={label}>
                       <div className="text-center">
@@ -103,7 +109,7 @@ export default function ForecastPage() {
           ) : (
             <AiCard>
               <p className="text-center text-muted-foreground py-8">
-                Configure parameters and click &quot;Generate Forecast&quot; to see predictions.
+                {t("ai.forecast_prompt")}
               </p>
             </AiCard>
           )}

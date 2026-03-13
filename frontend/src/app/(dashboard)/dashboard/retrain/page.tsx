@@ -7,7 +7,6 @@ import { AiCard } from "@/components/ai/AiCard";
 import { CsvUploadForm } from "@/components/ai/CsvUploadForm";
 import { CurrentMetricsDisplay } from "@/components/ai/CurrentMetricsDisplay";
 import { DataFormatInfo } from "@/components/ai/DataFormatInfo";
-import { RestoreDefaultsButton } from "@/components/ai/RestoreDefaultsButton";
 import { Button } from "@/components/ui/button";
 import { Database } from "lucide-react";
 import { mlApi } from "@/lib/api/ml-client";
@@ -75,7 +74,7 @@ export default function RetrainPage() {
       <div>
         <h1 className="text-2xl font-bold text-foreground">Model Retraining</h1>
         <p className="text-sm text-muted-foreground">
-          Retrain ML models with new data or restore defaults
+          Retrain ML models with your data
         </p>
       </div>
 
@@ -106,10 +105,7 @@ export default function RetrainPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <CsvUploadForm onSuccess={handleRetrainSuccess} />
-        <div className="space-y-6">
-          {format && <DataFormatInfo format={format} />}
-          <RestoreDefaultsButton onRestored={loadData} />
-        </div>
+        {format && <DataFormatInfo format={format} />}
       </div>
     </div>
   );

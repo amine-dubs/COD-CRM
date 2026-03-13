@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Plus, Search, Pencil, Trash2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { Select } from "@/components/ui/select";
 import type { Product } from "@/types/product";
 import type { PaginationMeta } from "@/types";
 
@@ -22,6 +23,9 @@ export default function ProductsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [sortKey, setSortKey] = useState("");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   // Create/Edit product modal
   const [showModal, setShowModal] = useState(false);
@@ -152,6 +156,35 @@ export default function ProductsPage() {
     }
   };
 
+  // ── Sorting & Filtering ───────────────────────────
+  const categories = Array.from(new Set(products.map((p) => p.category).filter(Boolean))) as string[];
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const filtered = categoryFilter
+    ? products.filter((p) => p.category === categoryFilter)
+    : products;
+
+  const sorted = sortKey
+    ? [...filtered].sort((a, b) => {
+        const av = (a as unknown as Record<string, unknown>)[sortKey];
+        const bv = (b as unknown as Record<string, unknown>)[sortKey];
+        const na = typeof av === "number" ? av : Number(av) || 0;
+        const nb = typeof bv === "number" ? bv : Number(bv) || 0;
+        if (typeof av === "string" && typeof bv === "string") {
+          return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+        }
+        return sortDir === "asc" ? na - nb : nb - na;
+      })
+    : filtered;
+
   const columns: Column<Product>[] = [
     {
       key: "image_url",
@@ -168,21 +201,25 @@ export default function ProductsPage() {
           <div className="h-10 w-10 rounded-md bg-muted" />
         ),
     },
-    { key: "name", header: t("products.name") },
+    { key: "name", header: t("products.name"), sortable: true },
     { key: "sku", header: t("products.sku") },
+    { key: "category", header: t("products.category"), sortable: true, render: (p) => p.category || "—" },
     {
       key: "price",
       header: t("products.price"),
+      sortable: true,
       render: (p) => formatCurrency(p.price),
     },
     {
       key: "cost_price",
       header: t("products.cost_price"),
+      sortable: true,
       render: (p) => (p.cost_price ? formatCurrency(p.cost_price) : "—"),
     },
     {
       key: "stock_quantity",
       header: t("products.stock"),
+      sortable: true,
       render: (p) => (
         <span
           className={
@@ -224,25 +261,41 @@ export default function ProductsPage() {
         </Button>
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder={t("search")}
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          className="ps-9"
-        />
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative max-w-md flex-1">
+          <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder={t("search")}
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            className="ps-9"
+          />
+        </div>
+        {categories.length > 0 && (
+          <Select
+            options={[
+              { value: "", label: t("products.all_categories") || "Toutes les catégories" },
+              ...categories.map((c) => ({ value: c, label: c })),
+            ]}
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="w-48"
+          />
+        )}
       </div>
 
       <DataTable
         columns={columns}
-        data={products}
+        data={sorted}
         isLoading={isLoading}
         emptyMessage={t("no_results")}
         rowKey={(p) => p.id}
+        sortKey={sortKey}
+        sortDirection={sortDir}
+        onSort={handleSort}
       />
 
       {meta && (

@@ -14,13 +14,13 @@ export function cn(...inputs: ClassValue[]) {
 /**
  * Format a number as Algerian Dinar (DZD).
  */
-export function formatCurrency(amount: number, locale: string = "fr-DZ"): string {
+export function formatCurrency(amount: number | string, locale: string = "fr-DZ"): string {
   return new Intl.NumberFormat(locale, {
     style: "currency",
     currency: "DZD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(Number(amount));
 }
 
 /**
@@ -82,8 +82,8 @@ export function truncate(text: string, length: number): string {
 /**
  * Format a percentage value for display.
  */
-export function formatPercent(value: number): string {
-  return `${value.toFixed(1)}%`;
+export function formatPercent(value: number | string): string {
+  return `${Number(value).toFixed(1)}%`;
 }
 
 /**

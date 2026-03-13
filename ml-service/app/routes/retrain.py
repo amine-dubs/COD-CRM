@@ -64,7 +64,9 @@ async def retrain_from_csv(file: UploadFile = File(...)):
             shutil.copy2(metrics_file, backup_dir / "metrics.json")
         logger.info(f"Backed up existing models to {backup_dir}")
 
-        # Run the training pipeline
+        # Force re-import train_all so any code changes are picked up immediately
+        import sys as _sys
+        _sys.modules.pop("train_all", None)
         from train_all import (
             train_risk_ensemble,
             train_segmentation,
@@ -158,6 +160,9 @@ async def retrain_from_database():
         if metrics_file.exists():
             shutil.copy2(metrics_file, backup_dir / "metrics.json")
 
+        # Force re-import train_all so any code changes are picked up immediately
+        import sys as _sys
+        _sys.modules.pop("train_all", None)
         from train_all import train_risk_ensemble, train_segmentation, train_forecasting
         from datetime import datetime
 
@@ -205,27 +210,6 @@ async def retrain_from_database():
                 shutil.copy2(f, settings.MODEL_DIR / f.name)
             ml_service.reload_models()
         raise HTTPException(status_code=500, detail=f"Retraining failed: {str(e)}")
-
-
-@router.post("/restore-defaults")
-def restore_default_models():
-    """Restore backed-up models (e.g. revert to Olist-trained defaults)."""
-    backup_dir = settings.MODEL_DIR / "backup"
-    if not backup_dir.exists() or not list(backup_dir.glob("*.joblib")):
-        raise HTTPException(status_code=404, detail="No backup models found.")
-
-    for f in backup_dir.glob("*.joblib"):
-        shutil.copy2(f, settings.MODEL_DIR / f.name)
-    backup_metrics = backup_dir / "metrics.json"
-    if backup_metrics.exists():
-        shutil.copy2(backup_metrics, settings.MODEL_DIR / "metrics.json")
-
-    reload_status = ml_service.reload_models()
-    return {
-        "success": True,
-        "message": "Default models restored and reloaded.",
-        "data": {"models_reloaded": reload_status},
-    }
 
 
 @router.get("/metrics")
@@ -365,22 +349,7 @@ def _prepare_custom_data(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df["estimated_delivery_days"] = 7
 
-    # Payment features
-    if "payment_type" in df.columns:
-        pt = df["payment_type"].str.lower().str.strip()
-        df["has_boleto"] = pt.isin(["boleto", "cod", "cash_on_delivery"]).astype(int)
-        df["has_credit_card"] = pt.isin(["credit_card", "credit"]).astype(int)
-        df["has_voucher"] = (pt == "voucher").astype(int)
-        df["has_debit_card"] = pt.isin(["debit_card", "debit"]).astype(int)
-    else:
-        df["has_boleto"] = 0
-        df["has_credit_card"] = 1
-        df["has_voucher"] = 0
-        df["has_debit_card"] = 0
-    df["n_payment_methods"] = pd.to_numeric(df.get("n_payment_methods", 1), errors="coerce").fillna(1).astype(int)
-    df["max_installments"] = pd.to_numeric(df.get("payment_installments", df.get("max_installments", 1)), errors="coerce").fillna(1).astype(int)
-
-    # Product quality features
+    # Product features
     df["avg_photos"] = pd.to_numeric(df.get("product_photos_qty", df.get("avg_photos", 1)), errors="coerce").fillna(1)
     df["avg_desc_length"] = pd.to_numeric(df.get("product_description_lenght", df.get("avg_desc_length", 500)), errors="coerce").fillna(500)
     df["avg_name_length"] = pd.to_numeric(df.get("product_name_lenght", df.get("avg_name_length", 30)), errors="coerce").fillna(30)
@@ -425,11 +394,23 @@ def _prepare_database_data(df: pd.DataFrame) -> pd.DataFrame:
     import numpy as np
 
     # Map CRM status to training format
-    df["order_status"] = df["status"].str.lower().str.strip()
-    delivered_keywords = ["delivered", "livree", "livré"]
-    df["is_delivered"] = df["order_status"].apply(
-        lambda s: 1 if any(k in str(s) for k in delivered_keywords) else 0
-    )
+    # CRM uses: delivered, cancelled, returned, no_answer, postponed, new, confirmed, processing, shipped
+    # train_risk_ensemble expects: "delivered", "canceled", "unavailable"
+    status_map = {
+        "delivered":   "delivered",
+        "cancelled":   "canceled",   # CRM double-l → model single-l
+        "canceled":    "canceled",
+        "returned":    "canceled",
+        "no_answer":   "canceled",
+        "postponed":   "canceled",
+        "new":         "in_progress",
+        "confirmed":   "in_progress",
+        "processing":  "in_progress",
+        "shipped":     "in_progress",
+    }
+    raw_status = df["status"].str.lower().str.strip()
+    df["order_status"] = raw_status.map(status_map).fillna("canceled")
+    df["is_delivered"] = (df["order_status"] == "delivered").astype(int)
 
     # Date columns
     df["order_date"] = pd.to_datetime(df["created_at"], errors="coerce")
@@ -445,27 +426,38 @@ def _prepare_database_data(df: pd.DataFrame) -> pd.DataFrame:
     # Region / wilaya
     df["customer_state"] = df.get("wilaya_name", pd.Series("default", index=df.index)).fillna("default").astype(str)
 
-    # Product category from product_names
-    df["product_category"] = df.get("product_names", pd.Series("unknown", index=df.index)).fillna("unknown").astype(str)
-    df["product_category"] = df["product_category"].apply(lambda x: x.split(",")[0].strip() if x != "unknown" else x)
+    # Product category from actual product categories (joined from products table)
+    if "product_categories" in df.columns:
+        df["product_category"] = df["product_categories"].fillna("unknown").astype(str)
+        df["product_category"] = df["product_category"].apply(lambda x: x.split(",")[0].strip() if x != "unknown" else x)
+    elif "product_names" in df.columns:
+        df["product_category"] = df["product_names"].fillna("unknown").astype(str)
+        df["product_category"] = df["product_category"].apply(lambda x: x.split(",")[0].strip() if x != "unknown" else x)
+    else:
+        df["product_category"] = "unknown"
 
     # Items count
     df["n_items"] = pd.to_numeric(df.get("n_items", 1), errors="coerce").fillna(1).astype(int)
 
-    # Defaults for features not available in CRM schema
-    df["avg_product_weight"] = 1.0
-    df["estimated_delivery_days"] = 7
-    df["has_boleto"] = 0
-    df["has_credit_card"] = 0
-    df["has_voucher"] = 0
-    df["has_debit_card"] = 0
-    df["n_payment_methods"] = 1
-    df["max_installments"] = 1
+    # Estimated delivery days based on shipping zone
+    zone_delivery = {"zone_1": 3, "zone_2": 5, "zone_3": 8}
+    if "shipping_zone" in df.columns:
+        df["estimated_delivery_days"] = df["shipping_zone"].map(zone_delivery).fillna(5)
+    else:
+        df["estimated_delivery_days"] = 5
+
+    # Product quality — use actual product weight from DB if available
+    df["avg_product_weight"] = 0.5
     df["avg_photos"] = 1
     df["avg_desc_length"] = 500
     df["avg_name_length"] = 30
     df["avg_volume"] = 10000
-    df["seller_customer_same_state"] = 0
+
+    # Geography — seller_customer_same_state based on shipping zone
+    if "shipping_zone" in df.columns:
+        df["seller_customer_same_state"] = (df["shipping_zone"] == "zone_1").astype(int)
+    else:
+        df["seller_customer_same_state"] = 0
     df["n_sellers"] = 1
 
     # Order ID

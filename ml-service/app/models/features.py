@@ -75,18 +75,18 @@ class FeatureEngineer:
     All features are available at prediction time (when a new order comes in)
     and do NOT leak the target variable (is_delivered).
 
-    Enhanced feature set (31 features) includes:
-    - Temporal: hour, day, month, weekend, day_of_month, quarter
+    Enhanced feature set (25 features) includes:
+    - Temporal: hour, day, month, weekend, day_of_month, quarter, algerian_holiday
     - Value: order_value, subtotal, shipping_cost, value_to_shipping_ratio
     - Items: n_items
     - Customer: is_repeat, order_count, avg_order_value
-    - Payment: has_boleto, has_credit_card, has_voucher, has_debit_card,
-               n_payment_methods, max_installments
     - Product quality: avg_photos, avg_desc_length, avg_name_length, avg_volume,
                        avg_product_weight
     - Geography: region_order_volume, seller_customer_same_state, n_sellers
     - Category: category_avg_price, category_popularity
     - Delivery: estimated_delivery_days
+
+    Payment features removed (Algeria uses COD only).
     """
 
     def __init__(self, historical_data: Optional[pd.DataFrame] = None):
@@ -154,27 +154,6 @@ class FeatureEngineer:
         total_spent = float(order.get("customer_total_spent", order_value))
         features["customer_avg_order_value"] = total_spent / count
 
-        # ── Payment features (strong signal for COD risk) ──
-        payment_method = str(order.get("payment_method") or "").lower()
-        has_boleto = order.get("has_boleto")
-        has_credit_card = order.get("has_credit_card")
-        has_voucher = order.get("has_voucher")
-        has_debit_card = order.get("has_debit_card")
-        features["has_boleto"] = int(
-            has_boleto if has_boleto is not None else int(payment_method in ("boleto", "cod", "cash_on_delivery"))
-        )
-        features["has_credit_card"] = int(
-            has_credit_card if has_credit_card is not None else int(payment_method in ("credit_card", "credit"))
-        )
-        features["has_voucher"] = int(
-            has_voucher if has_voucher is not None else int(payment_method == "voucher")
-        )
-        features["has_debit_card"] = int(
-            has_debit_card if has_debit_card is not None else int(payment_method in ("debit_card", "debit"))
-        )
-        features["n_payment_methods"] = int(order.get("n_payment_methods", 1))
-        features["max_installments"] = int(order.get("max_installments", 1))
-
         # ── Product quality features (seller effort proxy) ──
         features["avg_photos"] = float(order.get("avg_photos", 1.0))
         features["avg_desc_length"] = float(order.get("avg_desc_length", 500.0))
@@ -231,13 +210,6 @@ class FeatureEngineer:
             "is_repeat_customer",
             "customer_order_count",
             "customer_avg_order_value",
-            # Payment (6)
-            "has_boleto",
-            "has_credit_card",
-            "has_voucher",
-            "has_debit_card",
-            "n_payment_methods",
-            "max_installments",
             # Product quality (5)
             "avg_photos",
             "avg_desc_length",

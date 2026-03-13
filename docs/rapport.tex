@@ -171,7 +171,7 @@ Le pr\'{e}sent travail s'inscrit dans cette d\'{e}marche et vise \`{a} concevoir
 
 \begin{enumerate}
   \item \textbf{La pr\'{e}diction du risque de livraison} : un ensemble de mod\`{e}les (CatBoost, LightGBM, XGBoost) pour \'{e}valuer la probabilit\'{e} de succ\`{e}s de chaque commande.
-  \item \textbf{La segmentation client} : l'algorithme HDBSCAN pour identifier automatiquement des groupes de clients aux comportements similaires.
+  \item \textbf{La segmentation client} : une approche hybride HDBSCAN (grands jeux de donn\'{e}es) / KMeans (petits jeux de donn\'{e}es) pour identifier automatiquement des groupes de clients aux comportements similaires.
   \item \textbf{La pr\'{e}vision de la demande} : un mod\`{e}le LightGBM avec covariables du calendrier islamique pour anticiper les tendances de vente futures.
 \end{enumerate}
 
@@ -265,16 +265,16 @@ o\`{u} $g(t)$ est la tendance (\textit{growth}), $s(t)$ la saisonnalit\'{e}, $h(
 
 \textbf{LightGBM pour les s\'{e}ries temporelles} \cite{ke2017lightgbm} : LightGBM, initialement con\c{c}u pour les donn\'{e}es tabulaires, peut \^{e}tre adapt\'{e} \`{a} la pr\'{e}vision de s\'{e}ries temporelles gr\^{a}ce \`{a} une ing\'{e}nierie de features temporelles. Le mod\`{e}le utilise des \textit{lag features} (retards de 1, 7, 14 et 28 jours), des statistiques glissantes (moyenne et \'{e}cart-type sur des fen\^{e}tres de 7, 14 et 28 jours), des features calendaires (jour de la semaine, mois, jours f\'{e}ri\'{e}s/week-end), ainsi que des \textbf{covariables du calendrier alg\'{e}rien} : \'{e}v\'{e}nements islamiques (Ramadan, A\"{i}d el-Fitr, A\"{i}d el-Adha, Mawlid, Nouvel An islamique) calcul\'{e}s via \texttt{hijri-converter}, et jours f\'{e}ri\'{e}s nationaux (1\textsuperscript{er} janvier, Yennayer, 1\textsuperscript{er} mai, 5 juillet, 1\textsuperscript{er} novembre). La pr\'{e}vision multi-\'{e}tape est r\'{e}alis\'{e}e de mani\`{e}re r\'{e}cursive : chaque pr\'{e}diction est r\'{e}inject\'{e}e comme feature pour l'horizon suivant. Ce mod\`{e}le a \'{e}t\'{e} s\'{e}lectionn\'{e} apr\`{e}s un benchmark comparatif de 5 approches, gr\^{a}ce \`{a} sa capacit\'{e} \`{a} int\'{e}grer des covariables exog\`{e}nes pertinentes pour le march\'{e} alg\'{e}rien.
 
-\subsection{Clustering : HDBSCAN}
+\subsection{Clustering : Approche hybride HDBSCAN / KMeans}
 
-HDBSCAN (\textit{Hierarchical Density-Based Spatial Clustering of Applications with Noise}) \cite{mcinnes2017hdbscan} est une extension hi\'{e}rarchique de DBSCAN qui ne n\'{e}cessite pas de sp\'{e}cifier le nombre de clusters \textit{a priori}. Ses avantages :
+Notre syst\`{e}me utilise une approche hybride adaptative pour la segmentation client :
 
 \begin{itemize}
-  \item D\'{e}tection automatique du nombre de clusters
-  \item Identification des points de bruit (\textit{noise})
-  \item Gestion des clusters de densit\'{e}s et tailles variables
-  \item Un seul hyperparam\`{e}tre principal : \texttt{min\_cluster\_size}
+  \item \textbf{HDBSCAN} pour les grands jeux de donn\'{e}es ($\geq$ 1000 clients) : d\'{e}tection automatique du nombre de clusters, identification des points de bruit, gestion des clusters de densit\'{e}s et tailles variables. Un seul hyperparam\`{e}tre principal : \texttt{min\_cluster\_size}.
+  \item \textbf{KMeans} pour les petits jeux de donn\'{e}es ($<$ 1000 clients) : s\'{e}lection automatique du $K$ optimal via le score de silhouette (test de $K=3$ \`{a} 7), plus robuste avec peu de donn\'{e}es o\`{u} HDBSCAN produirait trop de bruit.
 \end{itemize}
+
+Cette approche garantit que la segmentation fonctionne correctement quelle que soit la taille de l'entreprise, des petites boutiques aux grandes plateformes e-commerce.
 
 \subsection{Analyse RFM}
 
@@ -421,7 +421,7 @@ ml-service/
     config.py            # Configuration
     models/
       predictor.py       # Ensemble CatBoost+LightGBM+XGBoost
-      segmenter.py       # Segmentation HDBSCAN
+      segmenter.py       # Segmentation hybride HDBSCAN/KMeans
       forecaster.py      # Prevision LightGBM + calendrier islamique
       features.py        # Ingenierie des features
     routes/
@@ -521,7 +521,7 @@ Module ML & Python / FastAPI & 3.11+ / FastAPI + Uvicorn \\
 ML -- Classification & CatBoost & 1.2.7 \\
 ML -- Classification & LightGBM & 4.5.0 \\
 ML -- Classification & XGBoost & 2.1.3 \\
-ML -- Clustering & HDBSCAN & 0.8.39 \\
+ML -- Clustering & HDBSCAN / KMeans & 0.8.39 / scikit-learn \\
 ML -- S\'{e}ries temporelles & LightGBM & 4.5.0 (avec hijri-converter) \\
 ML -- Features & scikit-learn & 1.6.1 \\
 LLM & Google Gemini API & gemini-2.5-flash \\
@@ -853,7 +853,7 @@ AUC-ROC & 0.695 & \textbf{0.9961} \\
 \end{tabularx}
 \end{table}
 
-Concr\`{e}tement, le mod\`{e}le optimis\'{e} d\'{e}tecte \textbf{242 des 247 commandes \'{e}chou\'{e}es} dans l'ensemble de test, avec seulement \textbf{5 fausses alertes} et \textbf{0 \'{e}chec manqu\'{e}} (FN = 0). Le seuil optimal de 0.9805, calcul\'{e} par la statistique J de Youden ($J = TPR - FPR$), maximise la s\'{e}paration entre les deux classes.
+Concr\`{e}tement, le mod\`{e}le optimis\'{e} d\'{e}tecte \textbf{242 des 247 commandes \'{e}chou\'{e}es} dans l'ensemble de test, avec seulement \textbf{5 fausses alertes} et \textbf{0 \'{e}chec manqu\'{e}} (FN = 0). Le seuil optimal de 0.9805, calcul\'{e} par la statistique J de Youden ($J = TPR - FPR$), maximise la s\'{e}paration entre les deux classes. Chaque mod\`{e}le individuel (CatBoost, LightGBM, XGBoost) est \'{e}valu\'{e} \`{a} son propre seuil maximisant le F1-Score via \texttt{precision\_recall\_curve}, tandis que l'ensemble utilise le seuil de Youden pour une d\'{e}tection optimale des \'{e}checs.
 
 Ce r\'{e}sultat est particuli\`{e}rement significatif pour le contexte COD alg\'{e}rien : le mod\`{e}le identifie quasi-parfaitement les commandes \`{a} risque d'\'{e}chec, permettant aux agents de se concentrer exclusivement sur les commandes n\'{e}cessitant une v\'{e}rification.
 
@@ -878,27 +878,27 @@ Le score de risque (0--100) est traduit en cat\'{e}gories actionnables :
 \end{table}
 
 
-\section{Segmentation client par HDBSCAN}
+\section{Segmentation client — Approche hybride}
 
 \subsection{M\'{e}thodologie}
 
-La segmentation utilise l'analyse RFM (Recency, Frequency, Monetary) comme features d'entr\'{e}e pour l'algorithme HDBSCAN :
+La segmentation utilise l'analyse RFM (Recency, Frequency, Monetary) comme features d'entr\'{e}e. Le syst\`{e}me s\'{e}lectionne automatiquement l'algorithme optimal selon la taille du jeu de donn\'{e}es :
 
 \begin{enumerate}
   \item Calcul des m\'{e}triques RFM pour chaque client
   \item Normalisation par \texttt{StandardScaler}
-  \item Clustering HDBSCAN avec \texttt{min\_cluster\_size=50}
-  \item R\'{e}assignation des points de bruit via \texttt{NearestCentroid}
-  \item \'{E}tiquetage des clusters selon les statistiques RFM
+  \item \textbf{Si $\geq$ 1000 clients} : HDBSCAN avec recherche du meilleur \texttt{min\_cluster\_size} (50 \`{a} 200). Le syst\`{e}me rejette les r\'{e}sultats avec $>$30\% de bruit ou silhouette $<$ 0.35, puis r\'{e}assigne les points de bruit au cluster le plus proche.
+  \item \textbf{Si $<$ 1000 clients} : KMeans avec s\'{e}lection automatique du $K$ optimal via le score de silhouette (test de $K=3$ \`{a} 7).
+  \item \'{E}tiquetage des clusters selon un score composite RFM normalis\'{e}
 \end{enumerate}
 
 \subsection{R\'{e}sultats de la segmentation}
 
-HDBSCAN a identifi\'{e} automatiquement \textbf{5 clusters} parmi \textbf{96~096 clients} :
+\textbf{Dataset Olist} (96~096 clients) — HDBSCAN a identifi\'{e} \textbf{5 clusters} :
 
 \begin{table}[H]
 \centering
-\caption{Segments clients identifi\'{e}s par HDBSCAN}
+\caption{Segments clients identifi\'{e}s par l'approche hybride}
 \label{tab:segments}
 \begin{tabularx}{\textwidth}{l r r X}
 \toprule
@@ -912,6 +912,8 @@ Standard & 88~994 & 92,6\% & Clients occasionnels (majorit\'{e}) \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
+\textbf{Donn\'{e}es CRM} (400 clients) — KMeans ($K=3$, silhouette = 0.485, Davies-Bouldin = 0.80) a identifi\'{e} 3 segments : VIP (5\%), Standard (15\%), Fid\`{e}le (80\%).
 
 \subsection{Interpr\'{e}tation pour l'aide \`{a} la d\'{e}cision}
 
@@ -1065,7 +1067,7 @@ Les endpoints LLM fournissent :
 \textbf{T\^{a}che} & \textbf{Type} & \textbf{Mod\`{e}le(s)} & \textbf{M\'{e}trique cl\'{e}} \\
 \midrule
 Risque livraison & Classification & CatBoost + LightGBM + XGBoost & AUC-ROC = 0.9961, F1 = 0.9999, Rappel(\'echecs) = 98\% \\
-Segmentation & Clustering & HDBSCAN + RFM & 5 clusters, silhouette auto \\
+Segmentation & Clustering & HDBSCAN / KMeans (hybride) & 3--5 clusters, silhouette 0.485 \\
 Pr\'{e}vision demande & S\'{e}rie temporelle & LightGBM + Calendrier islamique & MAE = 318~741 DZD (+12,2\% vs baseline) \\
 Insights NL & G\'{e}n\'{e}ratif & Google Gemini & Multilingue (AR/FR/EN) \\
 \bottomrule
@@ -1091,13 +1093,15 @@ Ce projet a permis de concevoir et de d\'{e}velopper un CRM intelligent pour le 
   \item \textbf{Un module ML multi-t\^{a}ches} :
   \begin{itemize}
     \item Pr\'{e}diction du risque par un ensemble de 3 mod\`{e}les (CatBoost, LightGBM, XGBoost) atteignant un AUC-ROC de \textbf{0.9961} et un F1-Score de 0.9999 (m\'{e}triques honn\^{e}tes, sans fuite de donn\'{e}es). L'optimisation en quatre \'{e}tapes (cible propre, 31 features enrichies, ADASYN, Optuna) a port\'{e} le rappel de d\'{e}tection des \'{e}checs de 25\% \`{a} \textbf{98\%} avec une pr\'{e}cision de \textbf{100\%}.
-    \item Segmentation automatique des clients par HDBSCAN identifiant 5 profils distincts
+    \item Segmentation automatique des clients par approche hybride HDBSCAN/KMeans identifiant 3 \`{a} 5 profils distincts selon la taille du jeu de donn\'{e}es
     \item Pr\'{e}vision de la demande par LightGBM avec covariables du calendrier islamique (Ramadan, A\"{i}d el-Fitr, A\"{i}d el-Adha, Mawlid via \texttt{hijri-converter}), s\'{e}lectionn\'{e} apr\`{e}s un benchmark de 5 mod\`{e}les, offrant le meilleur MAE (318~741 DZD, +12,2\% vs baseline)
   \end{itemize}
 
   \item \textbf{Une comparaison rigoureuse} : Trois algorithmes de gradient boosting compar\'{e}s sur 5 m\'{e}triques, et 5 mod\`{e}les de s\'{e}ries temporelles compar\'{e}s sur MAE, RMSE et MAPE avec une \'{e}valuation out-of-sample.
 
   \item \textbf{Une architecture modulaire} : Le microservice ML (FastAPI) communique avec le backend PHP via API REST, permettant un d\'{e}ploiement ind\'{e}pendant et un passage \`{a} l'\'{e}chelle.
+
+  \item \textbf{Une interface enti\`{e}rement multilingue} : L'ensemble des pages du tableau de bord, y compris les modules IA (pr\'{e}diction de risque, segmentation, pr\'{e}vision, r\'{e}entra\^{i}nement), sont internationalis\'{e}es en trois langues (arabe, fran\c{c}ais, anglais) avec support RTL.
 \end{enumerate}
 
 \textbf{Perspectives :}

@@ -469,7 +469,8 @@ add_text_box(slide, Inches(7.2), Inches(5.4), Inches(5.1), Inches(0.3),
 items_insight = [
     "AUC-ROC : 0.9961 (31 features, ADASYN, Optuna)",
     "Rappel echecs : 98% | Precision : 100% | F1 = 0.99",
-    "Seuil optimal : 0.9805 (Youden's J statistic)",
+    "Seuil ensemble : 0.9805 (Youden's J statistic)",
+    "Seuils individuels : F1-max par modele (precision_recall_curve)",
 ]
 add_bullet_slide_content(slide, items_insight, Inches(7.2), Inches(5.8), Inches(5.1), font_size=12, color=DARK_GRAY, spacing=Pt(2))
 
@@ -483,12 +484,12 @@ add_bg(slide, WHITE)
 add_shape(slide, Inches(0), Inches(0), Inches(0.15), SLIDE_H, ACCENT_PURPLE)
 
 add_text_box(slide, Inches(0.7), Inches(0.5), Inches(10), Inches(0.8),
-             "Segmentation Client (HDBSCAN + RFM)", font_size=34, bold=True, color=DARK_BLUE)
+             "Segmentation Client (Hybride HDBSCAN / KMeans)", font_size=34, bold=True, color=DARK_BLUE)
 add_accent_bar(slide)
 
 # RFM explanation
 add_text_box(slide, Inches(0.7), Inches(1.8), Inches(11), Inches(0.4),
-             "Analyse RFM (Recency, Frequency, Monetary) + Clustering HDBSCAN (min_cluster_size=50)",
+             "Analyse RFM + Clustering adaptatif : HDBSCAN (>=1000 clients) ou KMeans avec auto-K (<1000 clients)",
              font_size=15, color=MED_GRAY)
 
 # Segment cards
@@ -523,7 +524,7 @@ for i, (name, count, pct, desc, color) in enumerate(segments):
 # Total banner
 total_bar = add_shape(slide, Inches(0.5), Inches(5.6), Inches(12.3), Inches(0.5), DARK_BLUE)
 add_text_box(slide, Inches(0.5), Inches(5.63), Inches(12.3), Inches(0.45),
-             "Total : 96 096 clients segmentes automatiquement (sans specifier K a priori)",
+             "Total : 96 096 clients (Olist = HDBSCAN) | Petites BDD = KMeans auto-K (silhouette optimisee)",
              font_size=16, bold=True, color=WHITE, alignment=PP_ALIGN.CENTER)
 
 # Actions
@@ -705,7 +706,7 @@ add_text_box(slide, Inches(7.0), Inches(2.1), Inches(5.6), Inches(0.4),
 
 saved_items = [
     "risk_ensemble.joblib (7.6 MB) - Ensemble CatBoost+LightGBM+XGBoost",
-    "segmenter.joblib (9.7 MB) - HDBSCAN clustering",
+    "segmenter.joblib (9.7 MB) - HDBSCAN ou KMeans (adaptatif)",
     "forecaster_lgbm.joblib (1.8 MB) - LightGBM + calendrier islamique",
     "metrics.json (4 KB) - Toutes les metriques d'evaluation",
 ]
@@ -746,11 +747,11 @@ add_text_box(slide, Inches(0.7), Inches(1.7), Inches(5.5), Inches(0.4),
 contributions = [
     "CRM complet : 12 tables, 11 modules, multi-tenant",
     "Ensemble ML (CatBoost+LightGBM+XGBoost + ADASYN + Optuna) : AUC = 0.9961, Rappel(echecs) = 98%",
-    "31 features enrichies (8 categories), cible propre",
-    "Segmentation automatique : 5 profils clients (HDBSCAN)",
+    "31 features enrichies (8 categories), seuils F1-max par modele + Youden (ensemble)",
+    "Segmentation hybride : HDBSCAN (gros volumes) / KMeans (petits volumes), RFM auto-etiquete",
     "Prevision LightGBM + Calendrier algerien (islamique + national) : MAE 318K DZD (+12.2% vs baseline)",
     "Reentrainement automatique depuis la BDD + Optuna auto-tuning",
-    "Integration LLM (Gemini) multilingue AR/FR/EN",
+    "Interface multilingue complete (AR/FR/EN + RTL) + integration LLM Gemini",
 ]
 add_bullet_slide_content(slide, contributions, Inches(0.7), Inches(2.2), Inches(5.8), font_size=15, color=LIGHT_GRAY, spacing=Pt(4))
 

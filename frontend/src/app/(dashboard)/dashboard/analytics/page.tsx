@@ -38,9 +38,9 @@ export default function AnalyticsPage() {
       setIsLoading(true);
       try {
         const [dashRes, wilayaRes, prodRes] = await Promise.all([
-          apiClient.get("/analytics/dashboard"),
+          apiClient.get(`/analytics/dashboard?period=${period}`),
           apiClient.get(`/analytics/wilayas?period=${period}`),
-          apiClient.get(`/analytics/top-products?period=${period}`),
+          apiClient.get(`/analytics/products?period=${period}`),
         ]);
         setStats(dashRes.data.data);
         setWilayaData(wilayaRes.data.data || []);

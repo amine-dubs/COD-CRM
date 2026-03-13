@@ -98,7 +98,7 @@ export default function DashboardPage() {
           icon={<RotateCcw className="h-5 w-5" />}
           trend={
             stats?.return_rate
-              ? { value: stats.return_rate, isPositive: stats.return_rate < 20 }
+              ? { value: stats.return_rate, isPositive: false }
               : undefined
           }
         />

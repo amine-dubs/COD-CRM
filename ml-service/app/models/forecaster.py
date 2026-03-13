@@ -345,7 +345,7 @@ class DemandForecaster:
         """Build feature dict for a single prediction date."""
         # Check if date is an Algerian off-day (Fri-Sat weekend, national + Islamic holidays)
         dt_norm = dt.normalize()
-        is_off = int(dt.dayofweek >= 4)  # Friday-Saturday
+        is_off = int(dt.dayofweek in (4, 5))  # Friday=4, Saturday=5
         if not is_off:
             md = (dt.month, dt.day)
             if md in [(1, 1), (1, 12), (5, 1), (7, 5), (11, 1)]:
@@ -383,7 +383,7 @@ class DemandForecaster:
             recent = history_values[max(0, n - window) : n]
             row[f"rolling_mean_{window}"] = float(np.mean(recent))
             row[f"rolling_std_{window}"] = (
-                float(np.std(recent)) if len(recent) > 1 else 0.0
+                float(np.std(recent, ddof=1)) if len(recent) > 1 else 0.0
             )
 
         return row

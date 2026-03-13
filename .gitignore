@@ -68,3 +68,6 @@ docs/*.lot
 docs/*.fls
 docs/*.fdb_latexmk
 docs/*.synctex.gz
+
+# Generated seed data (regenerate with ml-service/generate_data.py)
+seed_data.sql

@@ -37,10 +37,12 @@ class DataService:
         query = """
             SELECT o.*, w.name as wilaya_name, w.shipping_zone,
                    COUNT(oi.id) as n_items,
-                   GROUP_CONCAT(DISTINCT oi.product_name) as product_names
+                   GROUP_CONCAT(DISTINCT oi.product_name) as product_names,
+                   GROUP_CONCAT(DISTINCT p.category) as product_categories
             FROM orders o
             LEFT JOIN wilayas w ON o.wilaya_id = w.id
             LEFT JOIN order_items oi ON o.id = oi.order_id
+            LEFT JOIN products p ON oi.product_id = p.id
         """
         params = []
         if store_id:

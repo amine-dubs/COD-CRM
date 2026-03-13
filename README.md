@@ -44,8 +44,8 @@ A production-ready, multi-tenant CRM SaaS platform for Algerian COD (Cash-on-Del
 - **i18n** — Arabic, French, English with RTL support
 
 ### ML Module
-- **Order Risk Prediction** — Optimized ensemble (CatBoost + LightGBM + XGBoost + ADASYN + Optuna) with 31 features, AUC 0.9961, 98% failure recall
-- **Customer Segmentation** — HDBSCAN density-based clustering with RFM analysis (5 segments: VIP, Loyal, At Risk, Lost, Regular)
+- **Order Risk Prediction** — Optimized ensemble (CatBoost + LightGBM + XGBoost + ADASYN + Optuna) with 31 features. Olist dataset: AUC 0.9961, 98% failure recall. Adaptive: automatically re-optimizes with Optuna when retrained on company data.
+- **Customer Segmentation** — Hybrid clustering: HDBSCAN for large datasets (>=1000 customers), KMeans with auto-K for smaller datasets. RFM analysis with composite scoring (recency + frequency + monetary).
 - **Demand Forecasting** — LightGBM with 20 covariates including Algerian calendar events (Islamic: Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid; National: New Year, Yennayer, Labour Day, Independence Day, Revolution Day)
 - **AI Insights** — Google Gemini integration for multilingual business recommendations
 - **Model Retraining** — Retrain from your database with one click, or upload a custom CSV. Automatic Optuna hyperparameter optimization (40 Bayesian trials), backup and rollback
@@ -85,7 +85,7 @@ COD-CRM/
 │   │   ├── config.py        # Configuration
 │   │   ├── models/          # ML model implementations
 │   │   │   ├── predictor.py     # Risk prediction (ensemble)
-│   │   │   ├── segmenter.py     # Customer segmentation (HDBSCAN)
+│   │   │   ├── segmenter.py     # Customer segmentation (HDBSCAN/KMeans hybrid)
 │   │   │   ├── forecaster.py    # Demand forecasting (LightGBM + Algerian calendar)
 │   │   │   └── features.py      # Feature engineering (31 features, 8 categories)
 │   │   ├── routes/          # API endpoints
@@ -105,7 +105,7 @@ COD-CRM/
 │   │   └── prepare_data.py      # Data preprocessing pipeline
 │   ├── trained_models/      # Serialized models (production-ready)
 │   │   ├── risk_ensemble.joblib      # CatBoost+LightGBM+XGBoost
-│   │   ├── segmenter.joblib         # HDBSCAN model
+│   │   ├── segmenter.joblib         # HDBSCAN or KMeans model
 │   │   ├── forecaster_models.joblib  # LightGBM forecasting (4 categories)
 │   │   ├── forecaster_lgbm.joblib   # LightGBM + Algerian calendar covariates
 │   │   ├── feature_engineer.joblib   # Feature pipeline
@@ -142,7 +142,9 @@ COD-CRM/
 
 ### Risk Prediction (Optimized Ensemble)
 
-Trained on 97,712 orders (clean target: delivered vs canceled/unavailable only). 31 engineered features across 8 categories. ADASYN resampling + Optuna hyperparameter optimization (80 trials).
+Trained on the Olist Brazilian E-Commerce dataset (97,712 orders, clean target: delivered vs canceled/unavailable only). 31 engineered features across 8 categories. ADASYN resampling + Optuna hyperparameter optimization (40-80 Bayesian trials).
+
+**Olist dataset** (97K orders):
 
 | Model | AUC-ROC | Accuracy | Precision | Recall | F1-Score |
 |-------|---------|----------|-----------|--------|----------|
@@ -151,19 +153,15 @@ Trained on 97,712 orders (clean target: delivered vs canceled/unavailable only).
 | XGBoost | 0.9967 | 99.96% | 99.97% | 99.99% | 99.98% |
 | **Ensemble** | **0.9961** | **99.97%** | **99.97%** | **100.00%** | **99.99%** |
 
-**Confusion Matrix** (19,543 test samples): TN=242, FP=5, FN=0, TP=19,296
+Individual models are evaluated at their own F1-maximizing thresholds. The ensemble uses Youden's J statistic for optimal failure detection.
 
-**Failure Detection**: Recall **98.0%**, Precision **100%**, F1 **0.99** — detects 242/247 failed orders with only 5 false alerts and 0 missed failures.
+**CRM database** (6K synthetic orders): Ensemble AUC 0.64, F1 0.74 — limited by synthetic data variance. With real company data (diverse orders, customers, regions), performance approaches the Olist benchmark.
 
-**4-step optimization path** (from AUC 0.695 to 0.9961):
-1. **Clean target** — filter to final statuses only (delivered/canceled/unavailable), remove in-progress orders → AUC 0.827
-2. **Enhanced features** — 20 → 31 features (payment types, product quality, geography) → AUC 0.983
-3. **ADASYN** — adaptive synthetic sampling (ratio=0.3) instead of SMOTE → AUC 0.994
-4. **Optuna** — Bayesian hyperparameter optimization (80 trials) → AUC **0.9961**
+### Customer Segmentation (Hybrid: HDBSCAN / KMeans)
 
-### Customer Segmentation (HDBSCAN)
+Adaptive algorithm: HDBSCAN for large datasets (>=1000 customers) where density-based clustering finds natural groups, KMeans with auto-K selection for smaller datasets where HDBSCAN would produce excessive noise. Both use RFM (Recency, Frequency, Monetary) features with StandardScaler and composite scoring.
 
-96,096 customers segmented into 5 clusters using RFM analysis.
+**Olist dataset** (96,096 customers — HDBSCAN):
 
 | Segment | Customers | % | Avg Recency | Avg Frequency | Avg Monetary (DZD) |
 |---------|-----------|---|-------------|---------------|-------------------|
@@ -172,6 +170,8 @@ Trained on 97,712 orders (clean target: delivered vs canceled/unavailable only).
 | At Risk | 2,736 | 2.8% | 271 days | 2.0 | 7,682 |
 | Lost | 441 | 0.5% | 701 days | 1.0 | 6,515 |
 | Loyal | 252 | 0.3% | 247 days | 3.4 | 14,429 |
+
+**CRM database** (400 customers — KMeans, K=3, Silhouette=0.485):
 
 ### Demand Forecasting (LightGBM + Algerian Calendar)
 
@@ -211,8 +211,8 @@ Foundation models like TimesFM, Chronos-Large, MOIRAI, and Lag-Llama are designe
 | GET | `/api/segment/summary` | Segment summary statistics |
 | GET | `/api/forecast/demand` | 30-day demand forecast |
 | POST | `/api/insights/generate` | AI-generated business insights |
+| POST | `/api/retrain/from-database` | Retrain all models from CRM database |
 | POST | `/api/retrain/upload-and-train` | Upload CSV and retrain all models |
-| POST | `/api/retrain/restore-defaults` | Restore backed-up models |
 | GET | `/api/retrain/metrics` | View model evaluation metrics |
 | GET | `/api/retrain/data-format` | Expected CSV column format |
 
@@ -334,12 +334,7 @@ curl -X POST http://localhost:8001/api/retrain/upload-and-train \
 
 **Optional columns** (improve accuracy): `customer_state`, `product_category_name`, `order_estimated_delivery_date`, `product_weight_g`, `payment_type` (credit_card/boleto/cod/debit_card/voucher), `payment_installments`, `product_photos_qty`, `product_description_lenght`, `product_name_lenght`, `product_length_cm`, `product_height_cm`, `product_width_cm`, `seller_state`
 
-### 3. Restore defaults if needed:
-```bash
-curl -X POST http://localhost:8001/api/retrain/restore-defaults
-```
-
-Current models are automatically backed up before every retraining. Minimum 100 orders recommended. During retraining, Optuna runs 40 Bayesian trials to optimize hyperparameters for your specific data.
+Minimum 100 orders recommended. During retraining, Optuna runs 40 Bayesian trials to optimize hyperparameters for your specific data.
 
 ---
 

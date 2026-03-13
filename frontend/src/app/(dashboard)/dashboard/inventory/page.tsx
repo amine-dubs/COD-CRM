@@ -24,6 +24,9 @@ export default function InventoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [sortKey, setSortKey] = useState("");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
   // Adjust stock modal
   const [showAdjust, setShowAdjust] = useState(false);
@@ -137,6 +140,35 @@ export default function InventoryPage() {
     }
   };
 
+  // ── Sorting & Filtering ───────────────────────────
+  const categories = Array.from(new Set(inventory.map((i) => i.category).filter(Boolean))) as string[];
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const filtered = categoryFilter
+    ? inventory.filter((i) => i.category === categoryFilter)
+    : inventory;
+
+  const sorted = sortKey
+    ? [...filtered].sort((a, b) => {
+        const av = (a as unknown as Record<string, unknown>)[sortKey];
+        const bv = (b as unknown as Record<string, unknown>)[sortKey];
+        if (typeof av === "string" && typeof bv === "string") {
+          return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
+        }
+        const na = typeof av === "number" ? av : Number(av) || 0;
+        const nb = typeof bv === "number" ? bv : Number(bv) || 0;
+        return sortDir === "asc" ? na - nb : nb - na;
+      })
+    : filtered;
+
   const productOptions = inventory.map((item) => ({
     value: String(item.id),
     label: item.name + (item.sku ? ` (${item.sku})` : ""),
@@ -167,12 +199,13 @@ export default function InventoryPage() {
   ];
 
   const columns: Column<InventoryItem>[] = [
-    { key: "name", header: t("inventory.product") },
+    { key: "name", header: t("inventory.product"), sortable: true },
     { key: "sku", header: t("inventory.sku"), render: (item) => item.sku || "—" },
-    { key: "category", header: t("inventory.category"), render: (item) => item.category || "—" },
+    { key: "category", header: t("inventory.category"), sortable: true, render: (item) => item.category || "—" },
     {
       key: "stock_quantity",
       header: t("inventory.quantity"),
+      sortable: true,
       render: (item) => (
         <span
           className={
@@ -244,26 +277,42 @@ export default function InventoryPage() {
         </Card>
       )}
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder={t("search")}
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          className="ps-9"
-        />
+      {/* Search & Filter */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative max-w-md flex-1">
+          <Search className="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder={t("search")}
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            className="ps-9"
+          />
+        </div>
+        {categories.length > 0 && (
+          <Select
+            options={[
+              { value: "", label: t("products.all_categories") || "Toutes les catégories" },
+              ...categories.map((c) => ({ value: c, label: c })),
+            ]}
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="w-48"
+          />
+        )}
       </div>
 
       <DataTable
         columns={columns}
-        data={inventory}
+        data={sorted}
         isLoading={isLoading}
         emptyMessage={t("no_results")}
         rowKey={(item) => item.id}
+        sortKey={sortKey}
+        sortDirection={sortDir}
+        onSort={handleSort}
       />
 
       {meta && (

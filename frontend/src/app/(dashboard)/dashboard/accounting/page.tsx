@@ -35,7 +35,7 @@ export default function AccountingPage() {
       try {
         const [revRes, dashRes] = await Promise.all([
           apiClient.get(`/analytics/revenue?period=${period}`),
-          apiClient.get("/analytics/dashboard"),
+          apiClient.get(`/analytics/dashboard?period=${period}`),
         ]);
         const revenueData: RevenueDataPoint[] = revRes.data.data || [];
         setRevenue(revenueData);
@@ -45,15 +45,16 @@ export default function AccountingPage() {
         setTotalOrders(dashData?.total_orders || 0);
 
         // Use actual costs from revenue data (total_cost comes from products cost_price)
+        // Use Number() to prevent string concatenation when API returns numeric strings
         const cost = revenueData.reduce(
-          (sum: number, p: RevenueDataPoint) => sum + (p.total_cost || 0),
+          (sum: number, p: RevenueDataPoint) => sum + (Number(p.total_cost) || 0),
           0
         );
         setTotalCost(cost);
 
         // Collected revenue (from delivered orders only)
         const collected = revenueData.reduce(
-          (sum: number, p: RevenueDataPoint) => sum + (p.collected_revenue || 0),
+          (sum: number, p: RevenueDataPoint) => sum + (Number(p.collected_revenue) || 0),
           0
         );
         setCollectedRevenue(collected);
@@ -141,7 +142,7 @@ export default function AccountingPage() {
           icon={<TrendingUp className="h-5 w-5" />}
         />
         <StatCard
-          title={t("accounting.estimated_costs")}
+          title={t("accounting.avg_order_value")}
           value={formatCurrency(avgOrderValue)}
           icon={<BarChart3 className="h-5 w-5" />}
         />
@@ -180,20 +181,20 @@ export default function AccountingPage() {
               {revenue.map((point, i) => (
                 <div
                   key={i}
-                  className="flex items-center justify-between rounded-md border border-border px-4 py-3"
+                  className="flex items-center justify-between rounded-md border border-border px-4 py-3 gap-2"
                 >
-                  <span className="text-sm font-medium text-foreground">
+                  <span className="text-sm font-medium text-foreground whitespace-nowrap">
                     {point.period}
                   </span>
-                  <div className="flex items-center gap-4">
-                    <span className="text-sm text-muted-foreground">
+                  <div className="flex items-center gap-3 flex-wrap justify-end">
+                    <span className="text-sm text-muted-foreground whitespace-nowrap">
                       {point.order_count} {t("analytics.orders_count").toLowerCase()}
                     </span>
-                    <span className="text-sm font-semibold text-success">
+                    <span className="text-sm font-semibold text-success whitespace-nowrap">
                       {formatCurrency(point.collected_revenue)}
                     </span>
                     {point.total_cost > 0 && (
-                      <span className="text-sm text-destructive">
+                      <span className="text-sm text-destructive whitespace-nowrap">
                         -{formatCurrency(point.total_cost)}
                       </span>
                     )}

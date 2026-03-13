@@ -6,9 +6,11 @@ import { AiAlert } from "@/components/ai/AiAlert";
 import { MetricsSummaryGrid } from "@/components/ai/MetricsSummaryGrid";
 import { ModelPerformanceTable } from "@/components/ai/ModelPerformanceTable";
 import { mlApi } from "@/lib/api/ml-client";
+import { useI18n } from "@/providers/i18n-provider";
 import type { TrainingMetrics, AiHealthStatus } from "@/types/ai";
 
 export default function AiDashboardPage() {
+  const { t } = useI18n();
   const [metrics, setMetrics] = useState<TrainingMetrics | null>(null);
   const [health, setHealth] = useState<AiHealthStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,7 +26,7 @@ export default function AiDashboardPage() {
         setMetrics(metricsRes.data);
         setHealth(healthRes);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load metrics");
+        setError(err instanceof Error ? err.message : t("ai.load_error"));
       } finally {
         setLoading(false);
       }
@@ -41,21 +43,21 @@ export default function AiDashboardPage() {
   }
 
   if (error || !metrics) {
-    return <AiAlert variant="error">{error || "No metrics available"}</AiAlert>;
+    return <AiAlert variant="error">{error || t("ai.no_metrics")}</AiAlert>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">AI Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Machine learning model overview & performance</p>
+          <h1 className="text-2xl font-bold text-foreground">{t("ai.dashboard_title")}</h1>
+          <p className="text-sm text-muted-foreground">{t("ai.dashboard_subtitle")}</p>
         </div>
         {health && (
           <div className="flex items-center gap-2">
             <span className={`h-2.5 w-2.5 rounded-full ${health.status === "ok" ? "bg-green-500" : "bg-red-500"}`} />
             <span className="text-sm text-muted-foreground">
-              ML Service {health.status === "ok" ? "Online" : "Offline"}
+              {health.status === "ok" ? t("ai.service_online") : t("ai.service_offline")}
             </span>
           </div>
         )}
