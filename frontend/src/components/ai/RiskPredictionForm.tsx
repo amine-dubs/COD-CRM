@@ -25,10 +25,17 @@ export function RiskPredictionForm({ onSubmit, isLoading }: RiskPredictionFormPr
   const [form, setForm] = useState(DEFAULT_VALUES);
 
   const update = (field: keyof OrderRiskRequest, value: string | boolean | number) => {
-    setForm((prev) => ({
-      ...prev,
-      [field]: typeof value === "boolean" ? value : typeof value === "string" ? (Number(value) || value) : value,
-    }));
+    setForm((prev) => {
+      const updated = {
+        ...prev,
+        [field]: typeof value === "boolean" ? value : typeof value === "string" ? (Number(value) || value) : value,
+      };
+      // Auto-calculate total_amount when subtotal or shipping_cost changes
+      if (field === "subtotal" || field === "shipping_cost") {
+        updated.total_amount = (Number(updated.subtotal) || 0) + (Number(updated.shipping_cost) || 0);
+      }
+      return updated;
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -40,9 +47,9 @@ export function RiskPredictionForm({ onSubmit, isLoading }: RiskPredictionFormPr
     <AiCard title={t("ai.order_details")}>
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="grid grid-cols-2 gap-3">
-          <Input label={`${t("ai.total_amount")} (DZD)`} type="number" value={form.total_amount} onChange={(e) => update("total_amount", e.target.value)} />
           <Input label={t("ai.subtotal")} type="number" value={form.subtotal} onChange={(e) => update("subtotal", e.target.value)} />
           <Input label={t("ai.shipping_cost")} type="number" value={form.shipping_cost} onChange={(e) => update("shipping_cost", e.target.value)} />
+          <Input label={`${t("ai.total_amount")} (DZD)`} type="number" value={form.total_amount} disabled className="bg-muted" />
           <Input label={t("ai.n_items")} type="number" min={1} value={form.n_items} onChange={(e) => update("n_items", e.target.value)} />
         </div>
 

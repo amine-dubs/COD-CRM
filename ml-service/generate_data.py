@@ -220,6 +220,7 @@ def generate_orders():
 
     # Generate day-by-day
     orders = []
+    returns = []  # Track return records
     order_id = 1
     current_date = START_DATE
     pool_idx = 0
@@ -343,15 +344,33 @@ def generate_orders():
                     for item in items
                 ],
             })
+
+            # If order is returned, create return record
+            if status == "returned":
+                return_reasons = ["customer_refused", "wrong_address", "not_reachable", "damaged", "wrong_product", "duplicate", "other"]
+                returns.append({
+                    "order_id": order_id,
+                    "store_id": STORE_ID,
+                    "reason": random.choice(return_reasons),
+                    "notes": f"Return processed for order {ref}",
+                    "status": random.choices(
+                        ["pending", "processing", "completed", "restocked"],
+                        weights=[10, 20, 50, 20]
+                    )[0],
+                    "created_at": delivered_at + datetime.timedelta(
+                        hours=random.randint(2, 48)
+                    ) if delivered_at else created_at,
+                })
+
             order_id += 1
 
         current_date += datetime.timedelta(days=1)
 
-    return orders
+    return orders, returns
 
 
-def write_sql(orders, filepath="seed_data.sql"):
-    """Write orders as a SQL file."""
+def write_sql(orders, returns, filepath="seed_data.sql"):
+    """Write orders and returns as a SQL file."""
     def esc(val):
         if val is None:
             return "NULL"
@@ -424,12 +443,30 @@ def write_sql(orders, filepath="seed_data.sql"):
                 f.write(",\n".join(item_rows))
                 f.write(";\n\n")
 
+        # Write returns in batches
+        if returns:
+            for i in range(0, len(returns), batch_size):
+                batch = returns[i : i + batch_size]
+                return_rows = []
+                for r in batch:
+                    vals = ", ".join([
+                        esc(r["store_id"]), esc(r["order_id"]),
+                        esc(r["reason"]), esc(r["notes"]),
+                        esc(r["status"]), esc(r["created_at"]),
+                    ])
+                    return_rows.append(f"({vals})")
+                f.write("INSERT INTO `returns` (\n")
+                f.write("  `store_id`, `order_id`, `reason`, `notes`, `status`, `created_at`\n")
+                f.write(") VALUES\n")
+                f.write(",\n".join(return_rows))
+                f.write(";\n\n")
+
     # Print statistics
     from collections import Counter
     statuses = Counter(o["status"] for o in orders)
     phones = set(o["customer_phone"] for o in orders)
 
-    print(f"Generated {len(orders)} orders -> {out_path}")
+    print(f"Generated {len(orders)} orders, {len(returns)} returns -> {out_path}")
     print(f"\n--- Order Status Distribution ---")
     for status, count in statuses.most_common():
         print(f"  {status:15s}: {count:5d} ({100*count/len(orders):.1f}%)")
@@ -445,5 +482,5 @@ def write_sql(orders, filepath="seed_data.sql"):
 
 
 if __name__ == "__main__":
-    orders = generate_orders()
-    write_sql(orders)
+    orders, returns = generate_orders()
+    write_sql(orders, returns)
