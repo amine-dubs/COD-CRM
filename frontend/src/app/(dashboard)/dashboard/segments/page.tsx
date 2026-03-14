@@ -6,6 +6,7 @@ import { AiAlert } from "@/components/ai/AiAlert";
 import { AiCard } from "@/components/ai/AiCard";
 import { SegmentPieChart } from "@/components/ai/SegmentPieChart";
 import { SegmentBarChart } from "@/components/ai/SegmentBarChart";
+import { SegmentRadarChart } from "@/components/ai/SegmentRadarChart";
 import { SegmentDetailsTable } from "@/components/ai/SegmentDetailsTable";
 import { mlApi } from "@/lib/api/ml-client";
 import type { SegmentationMetrics } from "@/types/ai";
@@ -102,8 +103,10 @@ export default function SegmentsPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <SegmentPieChart segments={segData.segments} />
-        <SegmentBarChart segments={segData.segments} />
+        <SegmentRadarChart segments={segData.segments} />
       </div>
+
+      <SegmentBarChart segments={segData.segments} />
 
       <SegmentDetailsTable segments={segData.segments} />
     </div>
