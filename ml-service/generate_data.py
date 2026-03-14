@@ -198,7 +198,7 @@ def pick_status(order_value, wilaya_id, is_repeat, days_ago):
 
 def generate_orders():
     """Generate all orders."""
-    customers = generate_customers(400)
+    customers = generate_customers(1500)
 
     # Customer repeat behavior: assign order frequency tier
     # 60% order 1-2 times, 25% order 3-8 times, 10% order 8-20, 5% order 20-50
