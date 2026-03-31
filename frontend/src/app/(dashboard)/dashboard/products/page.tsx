@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Image from "next/image";
 import { useI18n } from "@/providers/i18n-provider";
 import apiClient from "@/lib/api/client";
 import { DataTable, type Column } from "@/components/shared/data-table";
@@ -192,9 +193,11 @@ export default function ProductsPage() {
       className: "w-12",
       render: (p) =>
         p.image_url ? (
-          <img
+          <Image
             src={p.image_url}
             alt={p.name}
+            width={40}
+            height={40}
             className="h-10 w-10 rounded-md object-cover"
           />
         ) : (

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -40,9 +41,11 @@ export function Avatar({
       {...props}
     >
       {src ? (
-        <img
+        <Image
           src={src}
           alt={alt || fallback}
+          fill
+          sizes="48px"
           className="aspect-square h-full w-full object-cover"
         />
       ) : (

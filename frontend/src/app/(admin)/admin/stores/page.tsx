@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Pagination } from "@/components/shared/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Store as StoreIcon, Search, Ban, CheckCircle, Eye, Calendar, Users } from "lucide-react";
+import { Store as StoreIcon, Search, Ban, CheckCircle, Calendar, Users } from "lucide-react";
 import type { Store } from "@/types/auth";
 import type { PaginationMeta } from "@/types";
 

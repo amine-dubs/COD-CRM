@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Image from "next/image";
 import {
   fetchStoreInfo,
   fetchStoreProducts,
@@ -236,7 +237,13 @@ export default function StorefrontPage() {
       <header className="bg-white shadow-sm">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
           {store.logo_url ? (
-            <img src={store.logo_url} alt={store.name} className="h-10 w-10 rounded-full object-cover" />
+            <Image
+              src={store.logo_url}
+              alt={store.name}
+              width={40}
+              height={40}
+              className="h-10 w-10 rounded-full object-cover"
+            />
           ) : (
             <div className="h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
               <Store className="h-5 w-5 text-blue-600" />

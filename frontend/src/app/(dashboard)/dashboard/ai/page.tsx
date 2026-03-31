@@ -32,7 +32,7 @@ export default function AiDashboardPage() {
       }
     }
     load();
-  }, []);
+  }, [t]);
 
   if (loading) {
     return (

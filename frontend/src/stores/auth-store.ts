@@ -3,7 +3,7 @@
 // ============================================================
 
 import { create } from "zustand";
-import { User, Store, AuthTokens, LoginPayload, RegisterPayload } from "@/types";
+import { User, Store, LoginPayload, RegisterPayload } from "@/types";
 import { apiClient } from "@/lib/api";
 import { setTokens, clearTokens } from "@/lib/auth";
 
