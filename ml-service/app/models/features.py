@@ -93,6 +93,9 @@ class FeatureEngineer:
         self._region_volume = {}
         self._category_avg_price = {}
         self._category_volume = {}
+        self._default_region_volume = 0.5
+        self._default_category_avg_price = 0.0
+        self._default_category_volume = 0.5
         if historical_data is not None:
             self._compute_historical_stats(historical_data)
 
@@ -102,15 +105,23 @@ class FeatureEngineer:
             region_counts = df["customer_state"].value_counts()
             max_count = region_counts.max() if len(region_counts) > 0 else 1
             self._region_volume = (region_counts / max_count).to_dict()
+            if self._region_volume:
+                self._default_region_volume = float(np.mean(list(self._region_volume.values())))
 
         if "product_category" in df.columns:
             if "total_amount" in df.columns:
                 self._category_avg_price = (
                     df.groupby("product_category")["total_amount"].mean().to_dict()
                 )
+                if self._category_avg_price:
+                    self._default_category_avg_price = float(
+                        np.mean(list(self._category_avg_price.values()))
+                    )
             cat_counts = df["product_category"].value_counts()
             max_count = cat_counts.max() if len(cat_counts) > 0 else 1
             self._category_volume = (cat_counts / max_count).to_dict()
+            if self._category_volume:
+                self._default_category_volume = float(np.mean(list(self._category_volume.values())))
 
     def transform_order(self, order: dict) -> dict:
         """Transform a single order dict into feature dict for prediction."""
@@ -162,17 +173,40 @@ class FeatureEngineer:
         features["avg_product_weight"] = float(order.get("avg_product_weight", 1.0))
 
         # ── Geography features ──
-        region = str(order.get("customer_state", order.get("wilaya_id", "")))
-        features["region_order_volume"] = self._region_volume.get(region, 0.0)
-        features["seller_customer_same_state"] = int(
-            order.get("seller_customer_same_state", 0)
-        )
+        customer_state = order.get("customer_state")
+        wilaya_id = order.get("wilaya_id")
+        if customer_state is not None and str(customer_state).strip() != "":
+            region_key = str(customer_state).strip()
+        elif wilaya_id is not None and str(wilaya_id).strip() != "":
+            region_key = str(wilaya_id).strip()
+        else:
+            region_key = None
+
+        if region_key is None:
+            features["region_order_volume"] = self._default_region_volume
+        else:
+            features["region_order_volume"] = self._region_volume.get(
+                region_key, self._default_region_volume
+            )
+
+        # If not provided by caller, default to same-state (neutral) to avoid false risk inflation.
+        scss = order.get("seller_customer_same_state")
+        features["seller_customer_same_state"] = int(scss) if scss is not None else 1
         features["n_sellers"] = int(order.get("n_sellers", 1))
 
         # ── Category features ──
-        category = str(order.get("product_category", "unknown"))
-        features["category_avg_price"] = self._category_avg_price.get(category, 0.0)
-        features["category_popularity"] = self._category_volume.get(category, 0.0)
+        category_raw = order.get("product_category")
+        category = str(category_raw).strip() if category_raw is not None else ""
+        if category:
+            features["category_avg_price"] = self._category_avg_price.get(
+                category, self._default_category_avg_price
+            )
+            features["category_popularity"] = self._category_volume.get(
+                category, self._default_category_volume
+            )
+        else:
+            features["category_avg_price"] = self._default_category_avg_price
+            features["category_popularity"] = self._default_category_volume
 
         # ── Delivery features ──
         features["estimated_delivery_days"] = float(

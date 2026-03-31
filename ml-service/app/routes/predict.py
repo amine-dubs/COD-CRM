@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 from app.models.predictor import OrderRiskPredictor
@@ -16,33 +16,33 @@ class OrderRiskRequest(BaseModel):
     wilaya_id: Optional[int] = None
     customer_state: Optional[str] = None
     commune: Optional[str] = None
-    subtotal: float = 0
-    shipping_cost: float = 0
-    total_amount: float = 0
-    n_items: int = 1
+    subtotal: float = Field(0, ge=0)
+    shipping_cost: float = Field(0, ge=0)
+    total_amount: float = Field(0, ge=0)
+    n_items: int = Field(1, ge=1)
     product_category: Optional[str] = None
     order_date: Optional[str] = None
     is_repeat_customer: bool = False
-    customer_order_count: int = 0
-    customer_total_spent: float = 0
-    estimated_delivery_days: float = 7
-    avg_product_weight: float = 1.0
+    customer_order_count: int = Field(0, ge=0)
+    customer_total_spent: float = Field(0, ge=0)
+    estimated_delivery_days: float = Field(7, ge=1)
+    avg_product_weight: float = Field(1.0, ge=0)
     # Payment features
     payment_method: Optional[str] = None
-    has_boleto: Optional[int] = None
-    has_credit_card: Optional[int] = None
-    has_voucher: Optional[int] = None
-    has_debit_card: Optional[int] = None
-    n_payment_methods: int = 1
-    max_installments: int = 1
+    has_boleto: Optional[int] = Field(None, ge=0, le=1)
+    has_credit_card: Optional[int] = Field(None, ge=0, le=1)
+    has_voucher: Optional[int] = Field(None, ge=0, le=1)
+    has_debit_card: Optional[int] = Field(None, ge=0, le=1)
+    n_payment_methods: int = Field(1, ge=1)
+    max_installments: int = Field(1, ge=1)
     # Product quality features
-    avg_photos: float = 1.0
-    avg_desc_length: float = 500.0
-    avg_name_length: float = 30.0
-    avg_volume: float = 10000.0
+    avg_photos: float = Field(1.0, ge=0)
+    avg_desc_length: float = Field(500.0, ge=0)
+    avg_name_length: float = Field(30.0, ge=0)
+    avg_volume: float = Field(10000.0, ge=0)
     # Geography features
-    seller_customer_same_state: int = 0
-    n_sellers: int = 1
+    seller_customer_same_state: Optional[int] = Field(None, ge=0, le=1)
+    n_sellers: int = Field(1, ge=1)
 
 
 class BatchRiskRequest(BaseModel):
@@ -53,7 +53,9 @@ class BatchRiskRequest(BaseModel):
 def predict_order_risk(request: OrderRiskRequest):
     """Predict delivery risk for a single order."""
     try:
-        result = ml_service.predict_order_risk(request.model_dump())
+        result = ml_service.predict_order_risk(
+            request.model_dump(exclude_unset=True, exclude_none=True)
+        )
         return {"success": True, "data": result}
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))
@@ -63,7 +65,9 @@ def predict_order_risk(request: OrderRiskRequest):
 def predict_batch_risk(request: BatchRiskRequest):
     """Predict delivery risk for multiple orders."""
     try:
-        results = ml_service.predict_batch_risk([o.model_dump() for o in request.orders])
+        results = ml_service.predict_batch_risk(
+            [o.model_dump(exclude_unset=True, exclude_none=True) for o in request.orders]
+        )
         return {"success": True, "data": results}
     except RuntimeError as e:
         raise HTTPException(status_code=503, detail=str(e))

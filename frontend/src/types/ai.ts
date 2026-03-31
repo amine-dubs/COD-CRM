@@ -31,11 +31,18 @@ export interface OrderRiskRequest {
   customer_total_spent: number;
   estimated_delivery_days: number;
   avg_product_weight: number;
+  payment_method?: string;
+  has_boleto?: number;
+  has_credit_card?: number;
+  has_voucher?: number;
+  has_debit_card?: number;
+  n_payment_methods?: number;
+  max_installments?: number;
   avg_photos: number;
   avg_desc_length: number;
   avg_name_length: number;
   avg_volume: number;
-  seller_customer_same_state: number;
+  seller_customer_same_state?: number;
   n_sellers: number;
 }
 

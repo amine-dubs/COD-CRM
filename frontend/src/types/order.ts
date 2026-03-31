@@ -13,6 +13,18 @@ export type OrderStatus =
   | "no_answer"
   | "postponed";
 
+export interface OrderMlFeatures {
+  estimated_delivery_days?: number;
+  avg_product_weight?: number;
+  avg_photos?: number;
+  avg_desc_length?: number;
+  avg_name_length?: number;
+  avg_volume?: number;
+  seller_customer_same_state?: 0 | 1;
+  n_sellers?: number;
+  product_category?: string;
+}
+
 export interface Order {
   id: number;
   store_id: number;
@@ -33,6 +45,7 @@ export interface Order {
   notes: string | null;
   internal_notes: string | null;
   source: string;
+  ml_features?: OrderMlFeatures | null;
   created_by: number | null;
   confirmed_by: number | null;
   confirmed_at: string | null;
@@ -73,7 +86,11 @@ export interface CreateOrderPayload {
   commune: string;
   address: string;
   shipping_cost?: number;
+  discount?: number;
+  source?: string;
   notes?: string;
+  internal_notes?: string;
+  ml_features?: OrderMlFeatures;
   items: {
     product_id: number;
     quantity: number;

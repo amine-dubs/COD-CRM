@@ -16,9 +16,55 @@ import { Plus, Search, Trash2, Pencil, RefreshCw } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { ORDER_STATUSES } from "@/lib/constants/statuses";
 import { WILAYAS } from "@/lib/constants/wilayas";
-import type { Order, OrderStatus } from "@/types/order";
+import type { CreateOrderPayload, Order, OrderMlFeatures, OrderStatus } from "@/types/order";
 import type { Product } from "@/types/product";
 import type { PaginationMeta } from "@/types";
+
+type OrderFormState = {
+  customer_name: string;
+  customer_phone: string;
+  customer_phone_2: string;
+  wilaya_id: string;
+  commune: string;
+  address: string;
+  shipping_cost: string;
+  discount: string;
+  source: string;
+  notes: string;
+  internal_notes: string;
+  estimated_delivery_days: string;
+  avg_product_weight: string;
+  avg_photos: string;
+  avg_desc_length: string;
+  avg_name_length: string;
+  avg_volume: string;
+  seller_customer_same_state: string;
+  n_sellers: string;
+  product_category: string;
+};
+
+const DEFAULT_ORDER_FORM: OrderFormState = {
+  customer_name: "",
+  customer_phone: "",
+  customer_phone_2: "",
+  wilaya_id: "",
+  commune: "",
+  address: "",
+  shipping_cost: "0",
+  discount: "0",
+  source: "manual",
+  notes: "",
+  internal_notes: "",
+  estimated_delivery_days: "7",
+  avg_product_weight: "1",
+  avg_photos: "1",
+  avg_desc_length: "500",
+  avg_name_length: "30",
+  avg_volume: "10000",
+  seller_customer_same_state: "",
+  n_sellers: "1",
+  product_category: "",
+};
 
 export default function OrdersPage() {
   const { t, locale } = useI18n();
@@ -37,14 +83,7 @@ export default function OrdersPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [saving, setSaving] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
-  const [form, setForm] = useState({
-    customer_name: "",
-    customer_phone: "",
-    wilaya_id: "",
-    commune: "",
-    address: "",
-    notes: "",
-  });
+  const [form, setForm] = useState<OrderFormState>({ ...DEFAULT_ORDER_FORM });
   const [items, setItems] = useState<{ product_id: string; quantity: string; price: string }[]>([
     { product_id: "", quantity: "1", price: "" },
   ]);
@@ -107,7 +146,7 @@ export default function OrdersPage() {
 
   const openCreateModal = async () => {
     setEditingOrder(null);
-    setForm({ customer_name: "", customer_phone: "", wilaya_id: "", commune: "", address: "", notes: "" });
+    setForm({ ...DEFAULT_ORDER_FORM });
     setItems([{ product_id: "", quantity: "1", price: "" }]);
     setFormErrors({});
     setShowModal(true);
@@ -115,14 +154,30 @@ export default function OrdersPage() {
   };
 
   const openEditModal = async (order: Order) => {
+    const ml = order.ml_features ?? {};
+
     setEditingOrder(order);
     setForm({
       customer_name: order.customer_name || "",
       customer_phone: order.customer_phone || "",
+      customer_phone_2: order.customer_phone_2 || "",
       wilaya_id: order.wilaya_id ? String(order.wilaya_id) : "",
       commune: order.commune || "",
       address: order.address || "",
+      shipping_cost: String(order.shipping_cost ?? 0),
+      discount: String(order.discount ?? 0),
+      source: order.source || "manual",
       notes: order.notes || "",
+      internal_notes: order.internal_notes || "",
+      estimated_delivery_days: ml.estimated_delivery_days !== undefined ? String(ml.estimated_delivery_days) : "7",
+      avg_product_weight: ml.avg_product_weight !== undefined ? String(ml.avg_product_weight) : "1",
+      avg_photos: ml.avg_photos !== undefined ? String(ml.avg_photos) : "1",
+      avg_desc_length: ml.avg_desc_length !== undefined ? String(ml.avg_desc_length) : "500",
+      avg_name_length: ml.avg_name_length !== undefined ? String(ml.avg_name_length) : "30",
+      avg_volume: ml.avg_volume !== undefined ? String(ml.avg_volume) : "10000",
+      seller_customer_same_state: ml.seller_customer_same_state !== undefined ? String(ml.seller_customer_same_state) : "",
+      n_sellers: ml.n_sellers !== undefined ? String(ml.n_sellers) : "1",
+      product_category: ml.product_category || "",
     });
     setItems(
       order.items && order.items.length > 0
@@ -141,7 +196,7 @@ export default function OrdersPage() {
   const closeModal = () => {
     setShowModal(false);
     setEditingOrder(null);
-    setForm({ customer_name: "", customer_phone: "", wilaya_id: "", commune: "", address: "", notes: "" });
+    setForm({ ...DEFAULT_ORDER_FORM });
     setItems([{ product_id: "", quantity: "1", price: "" }]);
     setFormErrors({});
   };
@@ -172,6 +227,25 @@ export default function OrdersPage() {
     if (!form.wilaya_id) errors.wilaya_id = t("orders.error_wilaya_required");
     if (!form.commune.trim()) errors.commune = t("orders.error_commune_required");
     if (!form.address.trim()) errors.address = t("orders.error_address_required");
+
+    const shippingCost = Number(form.shipping_cost || 0);
+    const discount = Number(form.discount || 0);
+    const estimatedDeliveryDays = Number(form.estimated_delivery_days || 0);
+    const nSellers = Number(form.n_sellers || 0);
+
+    if (!Number.isFinite(shippingCost) || shippingCost < 0) {
+      errors.shipping_cost = t("orders.error_shipping_non_negative");
+    }
+    if (!Number.isFinite(discount) || discount < 0) {
+      errors.discount = t("orders.error_discount_non_negative");
+    }
+    if (!Number.isFinite(estimatedDeliveryDays) || estimatedDeliveryDays < 1) {
+      errors.estimated_delivery_days = t("orders.error_delivery_days");
+    }
+    if (!Number.isFinite(nSellers) || nSellers < 1) {
+      errors.n_sellers = t("orders.error_n_sellers_min");
+    }
+
     const validItems = items.filter((i) => i.product_id && i.quantity && i.price);
     if (validItems.length === 0) errors.items = t("orders.error_items_required");
     if (Object.keys(errors).length > 0) {
@@ -179,13 +253,36 @@ export default function OrdersPage() {
       return;
     }
 
-    const payload = {
+    const mlFeatures: OrderMlFeatures = {
+      estimated_delivery_days: Math.max(1, Math.floor(estimatedDeliveryDays)),
+      avg_product_weight: Math.max(0, Number(form.avg_product_weight || 0)),
+      avg_photos: Math.max(0, Number(form.avg_photos || 0)),
+      avg_desc_length: Math.max(0, Number(form.avg_desc_length || 0)),
+      avg_name_length: Math.max(0, Number(form.avg_name_length || 0)),
+      avg_volume: Math.max(0, Number(form.avg_volume || 0)),
+      n_sellers: Math.max(1, Math.floor(nSellers)),
+    };
+
+    if (form.product_category.trim()) {
+      mlFeatures.product_category = form.product_category.trim();
+    }
+    if (form.seller_customer_same_state === "0" || form.seller_customer_same_state === "1") {
+      mlFeatures.seller_customer_same_state = Number(form.seller_customer_same_state) as 0 | 1;
+    }
+
+    const payload: CreateOrderPayload = {
       customer_name: form.customer_name.trim(),
       customer_phone: form.customer_phone.trim(),
+      customer_phone_2: form.customer_phone_2.trim() || undefined,
       wilaya_id: parseInt(form.wilaya_id),
       commune: form.commune.trim(),
       address: form.address.trim(),
+      shipping_cost: shippingCost,
+      discount,
+      source: form.source.trim() || "manual",
       notes: form.notes.trim() || undefined,
+      internal_notes: form.internal_notes.trim() || undefined,
+      ml_features: mlFeatures,
       items: validItems.map((i) => ({
         product_id: parseInt(i.product_id),
         quantity: parseInt(i.quantity),
@@ -269,6 +366,20 @@ export default function OrdersPage() {
     label: `${p.name} — ${p.price} DA`,
   }));
 
+  const sourceOptions = [
+    { value: "manual", label: t("orders.source_manual") },
+    { value: "website", label: t("orders.source_website") },
+    { value: "facebook", label: t("orders.source_facebook") },
+    { value: "instagram", label: t("orders.source_instagram") },
+    { value: "other", label: t("orders.source_other") },
+  ];
+
+  const sellerRegionOptions = [
+    { value: "", label: t("orders.not_set") },
+    { value: "1", label: t("orders.same_state") },
+    { value: "0", label: t("orders.cross_region") },
+  ];
+
   const columns: Column<Order>[] = [
     { key: "reference", header: t("orders.reference"), sortable: true },
     { key: "customer_name", header: t("orders.customer_name"), sortable: true },
@@ -343,9 +454,9 @@ export default function OrdersPage() {
             className="ps-9"
           />
         </div>
+
         <Select
           options={[{ value: "", label: t("filter") + ": " + t("status") }, ...statusOptions]}
-          value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value);
             setPage(1);
@@ -397,10 +508,36 @@ export default function OrdersPage() {
             <Input label={t("orders.customer_phone") + " *"} name="customer_phone" value={form.customer_phone} onChange={handleFormChange} error={formErrors.customer_phone} />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input label={t("orders.customer_phone_2")} name="customer_phone_2" value={form.customer_phone_2} onChange={handleFormChange} />
+            <Select label={t("orders.source")} name="source" value={form.source} onChange={handleFormChange} options={sourceOptions} />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select label={t("orders.wilaya") + " *"} name="wilaya_id" value={form.wilaya_id} onChange={handleFormChange} options={wilayaOptions} placeholder={t("orders.select_wilaya")} error={formErrors.wilaya_id} />
             <Input label={t("orders.commune") + " *"} name="commune" value={form.commune} onChange={handleFormChange} error={formErrors.commune} />
           </div>
           <Input label={t("orders.address") + " *"} name="address" value={form.address} onChange={handleFormChange} error={formErrors.address} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label={t("orders.shipping_cost")}
+              name="shipping_cost"
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.shipping_cost}
+              onChange={handleFormChange}
+              error={formErrors.shipping_cost}
+            />
+            <Input
+              label={t("orders.discount")}
+              name="discount"
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.discount}
+              onChange={handleFormChange}
+              error={formErrors.discount}
+            />
+          </div>
 
           {/* Order Items */}
           <div>
@@ -432,6 +569,84 @@ export default function OrdersPage() {
           </div>
 
           <Textarea label={t("orders.notes")} name="notes" value={form.notes} onChange={handleFormChange} />
+          <Textarea label={t("orders.internal_notes")} name="internal_notes" value={form.internal_notes} onChange={handleFormChange} />
+
+          <details className="border border-border rounded-lg p-3">
+            <summary className="cursor-pointer text-sm font-medium text-foreground">{t("orders.ai_features")}</summary>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+              <Input
+                label={t("orders.estimated_delivery_days")}
+                name="estimated_delivery_days"
+                type="number"
+                min="1"
+                value={form.estimated_delivery_days}
+                onChange={handleFormChange}
+                error={formErrors.estimated_delivery_days}
+              />
+              <Input
+                label={t("orders.product_category")}
+                name="product_category"
+                value={form.product_category}
+                onChange={handleFormChange}
+              />
+              <Input
+                label={t("orders.avg_product_weight")}
+                name="avg_product_weight"
+                type="number"
+                min="0"
+                value={form.avg_product_weight}
+                onChange={handleFormChange}
+              />
+              <Input
+                label={t("orders.n_sellers")}
+                name="n_sellers"
+                type="number"
+                min="1"
+                value={form.n_sellers}
+                onChange={handleFormChange}
+                error={formErrors.n_sellers}
+              />
+              <Input
+                label={t("orders.avg_photos")}
+                name="avg_photos"
+                type="number"
+                min="0"
+                value={form.avg_photos}
+                onChange={handleFormChange}
+              />
+              <Input
+                label={t("orders.avg_desc_length")}
+                name="avg_desc_length"
+                type="number"
+                min="0"
+                value={form.avg_desc_length}
+                onChange={handleFormChange}
+              />
+              <Input
+                label={t("orders.avg_name_length")}
+                name="avg_name_length"
+                type="number"
+                min="0"
+                value={form.avg_name_length}
+                onChange={handleFormChange}
+              />
+              <Input
+                label={t("orders.avg_volume")}
+                name="avg_volume"
+                type="number"
+                min="0"
+                value={form.avg_volume}
+                onChange={handleFormChange}
+              />
+              <Select
+                label={t("orders.seller_customer_same_state")}
+                name="seller_customer_same_state"
+                value={form.seller_customer_same_state}
+                onChange={handleFormChange}
+                options={sellerRegionOptions}
+              />
+            </div>
+          </details>
 
           {formErrors.submit && <p className="text-sm text-destructive">{formErrors.submit}</p>}
 

@@ -41,6 +41,9 @@ class AIInsightsController
         $order = $this->db->queryOne(
             "SELECT o.*, w.name as wilaya_name, w.shipping_zone,
                     COUNT(oi.id) as n_items,
+                    AVG(COALESCE(p.weight, 1)) as avg_product_weight,
+                    AVG(CHAR_LENGTH(COALESCE(p.description, ''))) as avg_desc_length,
+                    AVG(CHAR_LENGTH(COALESCE(p.name, ''))) as avg_name_length,
                     GROUP_CONCAT(DISTINCT p.category) as product_categories
              FROM orders o
              LEFT JOIN wilayas w ON o.wilaya_id = w.id
@@ -67,25 +70,79 @@ class AIInsightsController
         $orderCount    = (int)($customerHistory['order_count'] ?? 0);
         $totalSpent    = (float)($customerHistory['total_spent'] ?? 0);
 
+        $mlFeatures = [];
+        if (!empty($order['ml_features']) && is_string($order['ml_features'])) {
+            $decoded = json_decode($order['ml_features'], true);
+            if (is_array($decoded)) {
+                $mlFeatures = $decoded;
+            }
+        }
+
+        $zoneDeliveryDays = [
+            'zone_1' => 3,
+            'zone_2' => 5,
+            'zone_3' => 8,
+        ];
+
+        $estimatedDeliveryDays = isset($mlFeatures['estimated_delivery_days'])
+            ? max(1, (int)$mlFeatures['estimated_delivery_days'])
+            : ($zoneDeliveryDays[$order['shipping_zone'] ?? ''] ?? 5);
+
+        $productCategory = 'unknown';
+        if (!empty($mlFeatures['product_category'])) {
+            $productCategory = (string)$mlFeatures['product_category'];
+        } elseif (!empty($order['product_categories'])) {
+            $parts = array_filter(array_map('trim', explode(',', (string)$order['product_categories'])));
+            if (!empty($parts)) {
+                $productCategory = (string)array_values($parts)[0];
+            }
+        }
+
         // Build payload for ML service
         $orderData = [
             'order_id'              => $order['id'],
             'customer_name'         => $order['customer_name'],
             'customer_phone'        => $order['customer_phone'],
             'wilaya_id'             => $order['wilaya_id'],
+            'customer_state'        => $order['wilaya_name'] ?? null,
             'commune'               => $order['commune'],
             'subtotal'              => (float)$order['subtotal'],
             'shipping_cost'         => (float)$order['shipping_cost'],
             'total_amount'          => (float)$order['total_amount'],
-            'n_items'               => (int)($order['n_items'] ?? 1),
-            'product_category'      => $order['product_categories'] ?? 'unknown',
+            'n_items'               => max(1, (int)($order['n_items'] ?? 1)),
+            'product_category'      => $productCategory,
             'order_date'            => $order['created_at'],
             'is_repeat_customer'    => $orderCount > 0,
             'customer_order_count'  => $orderCount,
             'customer_total_spent'  => $totalSpent,
-            'estimated_delivery_days' => 7,
+            'estimated_delivery_days' => $estimatedDeliveryDays,
+            'avg_product_weight'    => isset($mlFeatures['avg_product_weight'])
+                ? max(0.0, (float)$mlFeatures['avg_product_weight'])
+                : max(0.0, (float)($order['avg_product_weight'] ?? 1.0)),
+            'avg_photos'            => isset($mlFeatures['avg_photos'])
+                ? max(0.0, (float)$mlFeatures['avg_photos'])
+                : 1.0,
+            'avg_desc_length'       => isset($mlFeatures['avg_desc_length'])
+                ? max(0.0, (float)$mlFeatures['avg_desc_length'])
+                : max(0.0, (float)($order['avg_desc_length'] ?? 500.0)),
+            'avg_name_length'       => isset($mlFeatures['avg_name_length'])
+                ? max(0.0, (float)$mlFeatures['avg_name_length'])
+                : max(0.0, (float)($order['avg_name_length'] ?? 30.0)),
+            'avg_volume'            => isset($mlFeatures['avg_volume'])
+                ? max(0.0, (float)$mlFeatures['avg_volume'])
+                : 10000.0,
+            'n_sellers'             => isset($mlFeatures['n_sellers'])
+                ? max(1, (int)$mlFeatures['n_sellers'])
+                : 1,
             'payment_method'        => 'cod', // Default for Algerian COD e-commerce
         ];
+
+        if (isset($mlFeatures['seller_customer_same_state']) && $mlFeatures['seller_customer_same_state'] !== '') {
+            $scss = (int)$mlFeatures['seller_customer_same_state'];
+            if ($scss === 0 || $scss === 1) {
+                $orderData['seller_customer_same_state'] = $scss;
+            }
+        }
 
         $result = $this->aiService->getOrderRisk($orderData);
 
@@ -185,12 +242,16 @@ class AIInsightsController
                     o.subtotal,
                     o.shipping_cost,
                     o.discount,
+                    o.ml_features,
                     o.customer_phone AS customer_unique_id,
                     o.customer_name,
                     o.attempt_count,
                     w.name AS customer_state,
                     w.shipping_zone,
                     COUNT(oi.id) AS n_items,
+                    AVG(COALESCE(p.weight, 0)) AS avg_product_weight,
+                    AVG(CHAR_LENGTH(COALESCE(p.description, ''))) AS avg_desc_length,
+                    AVG(CHAR_LENGTH(COALESCE(p.name, ''))) AS avg_name_length,
                     GROUP_CONCAT(DISTINCT p.category SEPARATOR ',') AS product_category_name
              FROM orders o
              LEFT JOIN wilayas w ON o.wilaya_id = w.id
@@ -226,8 +287,54 @@ class AIInsightsController
 
         foreach ($orders as &$order) {
             $order['order_status'] = $statusMap[$order['order_status']] ?? $order['order_status'];
-            // Default payment type for Algerian COD
+
+            $mlFeatures = [];
+            if (!empty($order['ml_features']) && is_string($order['ml_features'])) {
+                $decoded = json_decode($order['ml_features'], true);
+                if (is_array($decoded)) {
+                    $mlFeatures = $decoded;
+                }
+            }
+
+            $zoneDeliveryDays = [
+                'zone_1' => 3,
+                'zone_2' => 5,
+                'zone_3' => 8,
+            ];
+
+            $order['estimated_delivery_days'] = isset($mlFeatures['estimated_delivery_days'])
+                ? max(1, (int)$mlFeatures['estimated_delivery_days'])
+                : ($zoneDeliveryDays[$order['shipping_zone'] ?? ''] ?? 5);
+
+            $order['avg_product_weight'] = isset($mlFeatures['avg_product_weight'])
+                ? max(0.0, (float)$mlFeatures['avg_product_weight'])
+                : max(0.0, (float)($order['avg_product_weight'] ?? 0.5));
+            $order['avg_photos'] = isset($mlFeatures['avg_photos'])
+                ? max(0.0, (float)$mlFeatures['avg_photos'])
+                : 1.0;
+            $order['avg_desc_length'] = isset($mlFeatures['avg_desc_length'])
+                ? max(0.0, (float)$mlFeatures['avg_desc_length'])
+                : max(0.0, (float)($order['avg_desc_length'] ?? 500.0));
+            $order['avg_name_length'] = isset($mlFeatures['avg_name_length'])
+                ? max(0.0, (float)$mlFeatures['avg_name_length'])
+                : max(0.0, (float)($order['avg_name_length'] ?? 30.0));
+            $order['avg_volume'] = isset($mlFeatures['avg_volume'])
+                ? max(0.0, (float)$mlFeatures['avg_volume'])
+                : 10000.0;
+            $order['seller_customer_same_state'] = isset($mlFeatures['seller_customer_same_state'])
+                ? ((int)$mlFeatures['seller_customer_same_state'] === 1 ? 1 : 0)
+                : 1;
+            $order['n_sellers'] = isset($mlFeatures['n_sellers'])
+                ? max(1, (int)$mlFeatures['n_sellers'])
+                : 1;
+
+            if (!empty($mlFeatures['product_category'])) {
+                $order['product_category_name'] = (string)$mlFeatures['product_category'];
+            }
+
+            // Default payment type for Algerian COD.
             $order['payment_type'] = 'cod';
+            unset($order['ml_features']);
         }
         unset($order);
 

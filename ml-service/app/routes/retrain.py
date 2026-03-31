@@ -339,7 +339,7 @@ def _prepare_custom_data(df: pd.DataFrame) -> pd.DataFrame:
 
     # Numeric defaults
     df["shipping_cost"] = pd.to_numeric(df.get("shipping_cost", df.get("freight_value", 0)), errors="coerce").fillna(400)
-    df["n_items"] = pd.to_numeric(df.get("n_items", df.get("order_item_id", 1)), errors="coerce").fillna(1).astype(int)
+    df["n_items"] = pd.to_numeric(df.get("n_items", df.get("order_item_id", 1)), errors="coerce").fillna(1).clip(lower=1).astype(int)
     df["avg_product_weight"] = pd.to_numeric(df.get("product_weight_g", 1000), errors="coerce").fillna(1000) / 1000
 
     if "order_estimated_delivery_date" in df.columns:
@@ -365,8 +365,9 @@ def _prepare_custom_data(df: pd.DataFrame) -> pd.DataFrame:
     if "seller_state" in df.columns:
         df["seller_customer_same_state"] = (df["customer_state"] == df["seller_state"]).astype(int)
     else:
-        df["seller_customer_same_state"] = 0
-    df["n_sellers"] = pd.to_numeric(df.get("n_sellers", 1), errors="coerce").fillna(1).astype(int)
+        # Neutral fallback when seller location is unknown (avoid systematic cross-region bias).
+        df["seller_customer_same_state"] = 1
+    df["n_sellers"] = pd.to_numeric(df.get("n_sellers", 1), errors="coerce").fillna(1).clip(lower=1).astype(int)
 
     # Order ID
     if "order_id" not in df.columns:
@@ -436,29 +437,80 @@ def _prepare_database_data(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df["product_category"] = "unknown"
 
+    # Decode optional ml_features JSON saved on orders.
+    if "ml_features" in df.columns:
+        ml_dicts = df["ml_features"].apply(
+            lambda x: json.loads(x) if isinstance(x, str) and x.strip() else (x if isinstance(x, dict) else {})
+        )
+    else:
+        ml_dicts = pd.Series([{} for _ in range(len(df))], index=df.index)
+
+    ml_product_category = ml_dicts.apply(lambda d: d.get("product_category") if isinstance(d, dict) else None)
+    mask_cat = ml_product_category.notna() & (ml_product_category.astype(str).str.strip() != "")
+    df.loc[mask_cat, "product_category"] = ml_product_category[mask_cat].astype(str)
+
     # Items count
-    df["n_items"] = pd.to_numeric(df.get("n_items", 1), errors="coerce").fillna(1).astype(int)
+    df["n_items"] = pd.to_numeric(df.get("n_items", 1), errors="coerce").fillna(1).clip(lower=1).astype(int)
 
-    # Estimated delivery days based on shipping zone
+    # Estimated delivery days: ml_features override, then zone-based fallback.
     zone_delivery = {"zone_1": 3, "zone_2": 5, "zone_3": 8}
-    if "shipping_zone" in df.columns:
-        df["estimated_delivery_days"] = df["shipping_zone"].map(zone_delivery).fillna(5)
-    else:
-        df["estimated_delivery_days"] = 5
+    zone_days = df["shipping_zone"].map(zone_delivery).fillna(5) if "shipping_zone" in df.columns else pd.Series(5, index=df.index)
+    ml_estimated_days = pd.to_numeric(
+        ml_dicts.apply(lambda d: d.get("estimated_delivery_days") if isinstance(d, dict) else None),
+        errors="coerce",
+    )
+    df["estimated_delivery_days"] = ml_estimated_days.fillna(zone_days).clip(lower=1)
 
-    # Product quality — use actual product weight from DB if available
-    df["avg_product_weight"] = 0.5
-    df["avg_photos"] = 1
-    df["avg_desc_length"] = 500
-    df["avg_name_length"] = 30
-    df["avg_volume"] = 10000
+    # Product quality features: use stored ml_features overrides first, then DB-derived aggregates.
+    ml_avg_weight = pd.to_numeric(
+        ml_dicts.apply(lambda d: d.get("avg_product_weight") if isinstance(d, dict) else None),
+        errors="coerce",
+    )
+    db_avg_weight = pd.to_numeric(df.get("avg_product_weight", 0.5), errors="coerce").fillna(0.5)
+    df["avg_product_weight"] = ml_avg_weight.fillna(db_avg_weight).clip(lower=0)
 
-    # Geography — seller_customer_same_state based on shipping zone
+    ml_avg_photos = pd.to_numeric(
+        ml_dicts.apply(lambda d: d.get("avg_photos") if isinstance(d, dict) else None),
+        errors="coerce",
+    )
+    df["avg_photos"] = ml_avg_photos.fillna(1).clip(lower=0)
+
+    ml_avg_desc = pd.to_numeric(
+        ml_dicts.apply(lambda d: d.get("avg_desc_length") if isinstance(d, dict) else None),
+        errors="coerce",
+    )
+    db_avg_desc = pd.to_numeric(df.get("avg_desc_length", 500), errors="coerce").fillna(500)
+    df["avg_desc_length"] = ml_avg_desc.fillna(db_avg_desc).clip(lower=0)
+
+    ml_avg_name = pd.to_numeric(
+        ml_dicts.apply(lambda d: d.get("avg_name_length") if isinstance(d, dict) else None),
+        errors="coerce",
+    )
+    db_avg_name = pd.to_numeric(df.get("avg_name_length", 30), errors="coerce").fillna(30)
+    df["avg_name_length"] = ml_avg_name.fillna(db_avg_name).clip(lower=0)
+
+    ml_avg_volume = pd.to_numeric(
+        ml_dicts.apply(lambda d: d.get("avg_volume") if isinstance(d, dict) else None),
+        errors="coerce",
+    )
+    df["avg_volume"] = ml_avg_volume.fillna(10000).clip(lower=0)
+
+    # Geography: use stored value when available; otherwise fallback to neutral estimate.
+    ml_scss = pd.to_numeric(
+        ml_dicts.apply(lambda d: d.get("seller_customer_same_state") if isinstance(d, dict) else None),
+        errors="coerce",
+    )
     if "shipping_zone" in df.columns:
-        df["seller_customer_same_state"] = (df["shipping_zone"] == "zone_1").astype(int)
+        scss_fallback = (df["shipping_zone"] == "zone_1").astype(int)
     else:
-        df["seller_customer_same_state"] = 0
-    df["n_sellers"] = 1
+        scss_fallback = pd.Series(1, index=df.index)
+    df["seller_customer_same_state"] = ml_scss.fillna(scss_fallback).clip(lower=0, upper=1).astype(int)
+
+    ml_n_sellers = pd.to_numeric(
+        ml_dicts.apply(lambda d: d.get("n_sellers") if isinstance(d, dict) else None),
+        errors="coerce",
+    )
+    df["n_sellers"] = ml_n_sellers.fillna(1).clip(lower=1).astype(int)
 
     # Order ID
     if "order_id" not in df.columns:

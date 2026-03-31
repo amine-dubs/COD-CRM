@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine,
@@ -38,9 +38,6 @@ interface ChartDataPoint {
 }
 
 export function ForecastLineChart({ predictions, eventAnnotations = [] }: ForecastLineChartProps) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
   const chartData: ChartDataPoint[] = useMemo(() => {
     return predictions.map((p) => {
       const dateStr = new Date(p.ds).toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -78,14 +75,6 @@ export function ForecastLineChart({ predictions, eventAnnotations = [] }: Foreca
     const types = new Set(eventAnnotations.map((a) => a.event));
     return Array.from(types);
   }, [eventAnnotations]);
-
-  if (!mounted) {
-    return (
-      <AiCard title="Demand Forecast">
-        <div className="h-[400px] flex items-center justify-center text-muted-foreground">Loading chart...</div>
-      </AiCard>
-    );
-  }
 
   return (
     <AiCard title="Demand Forecast" subtitle="LightGBM forecast with confidence bands">

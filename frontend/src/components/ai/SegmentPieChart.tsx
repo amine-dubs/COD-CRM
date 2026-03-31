@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { AiCard } from "@/components/ai/AiCard";
 import { getSegmentColor } from "@/lib/utils/ai";
@@ -11,22 +10,11 @@ interface SegmentPieChartProps {
 }
 
 export function SegmentPieChart({ segments }: SegmentPieChartProps) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
   const data = Object.entries(segments).map(([name, s]) => ({
     name,
     value: s.count,
     percentage: s.percentage,
   }));
-
-  if (!mounted) {
-    return (
-      <AiCard title="Segment Distribution">
-        <div className="h-[300px] flex items-center justify-center text-muted-foreground">Loading chart...</div>
-      </AiCard>
-    );
-  }
 
   return (
     <AiCard title="Segment Distribution">

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import {
   RadarChart,
   PolarGrid,
@@ -68,9 +67,6 @@ function normalizeRFM(segments: Record<string, SegmentMetricEntry>) {
 }
 
 export function SegmentRadarChart({ segments }: SegmentRadarChartProps) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
   const normalized = normalizeRFM(segments);
 
   // Transform data for radar chart format
@@ -88,16 +84,6 @@ export function SegmentRadarChart({ segments }: SegmentRadarChartProps) {
     });
     return row;
   });
-
-  if (!mounted) {
-    return (
-      <AiCard title="RFM Radar">
-        <div className="h-[350px] flex items-center justify-center text-muted-foreground">
-          Loading chart...
-        </div>
-      </AiCard>
-    );
-  }
 
   return (
     <AiCard title="RFM Radar" subtitle="Rank-based scores (evenly distributed)">

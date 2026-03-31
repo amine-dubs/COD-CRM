@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { AiCard } from "@/components/ai/AiCard";
 import type { SegmentMetricEntry } from "@/types/ai";
@@ -50,22 +49,11 @@ function MiniChart({ data, label, unit, color, hint }: MiniChartProps) {
 }
 
 export function SegmentBarChart({ segments }: SegmentBarChartProps) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
-
   const entries = Object.entries(segments);
 
   const recencyData = entries.map(([name, s]) => ({ name, value: Math.round(s.avg_recency) }));
   const frequencyData = entries.map(([name, s]) => ({ name, value: Math.round(s.avg_frequency * 10) / 10 }));
   const monetaryData = entries.map(([name, s]) => ({ name, value: Math.round(s.avg_monetary) }));
-
-  if (!mounted) {
-    return (
-      <AiCard title="RFM Breakdown">
-        <div className="h-[300px] flex items-center justify-center text-muted-foreground">Loading chart...</div>
-      </AiCard>
-    );
-  }
 
   return (
     <AiCard title="RFM Breakdown" subtitle="Each dimension on its own scale">

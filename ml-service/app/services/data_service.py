@@ -37,6 +37,9 @@ class DataService:
         query = """
             SELECT o.*, w.name as wilaya_name, w.shipping_zone,
                    COUNT(oi.id) as n_items,
+                 AVG(COALESCE(p.weight, 0)) as avg_product_weight,
+                 AVG(CHAR_LENGTH(COALESCE(p.description, ''))) as avg_desc_length,
+                 AVG(CHAR_LENGTH(COALESCE(p.name, ''))) as avg_name_length,
                    GROUP_CONCAT(DISTINCT oi.product_name) as product_names,
                    GROUP_CONCAT(DISTINCT p.category) as product_categories
             FROM orders o

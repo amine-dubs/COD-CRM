@@ -73,7 +73,7 @@ class OrderRiskPredictor:
         score = round(ensemble_prob * 100, 1)
 
         category = self._get_category(score)
-        reasons = self._get_risk_reasons(features, score)
+        reasons = self._get_risk_reasons(features, score, order_data)
         recommendation = self._get_recommendation(category)
 
         return {
@@ -100,7 +100,19 @@ class OrderRiskPredictor:
         else:
             return "low"
 
-    def _get_risk_reasons(self, features: dict, score: float) -> list[str]:
+    def _get_risk_reasons(self, features: dict, score: float, order_data: Optional[dict] = None) -> list[str]:
+        def _has_value(v) -> bool:
+            return v is not None and str(v).strip() != ""
+
+        order_data = order_data or {}
+        has_region_input = _has_value(order_data.get("customer_state")) or _has_value(
+            order_data.get("wilaya_id")
+        )
+        has_cross_region_input = "seller_customer_same_state" in order_data and _has_value(
+            order_data.get("seller_customer_same_state")
+        )
+        has_category_input = _has_value(order_data.get("product_category"))
+
         reasons = []
         # Customer history
         if features.get("customer_order_count", 0) == 0:
@@ -111,12 +123,12 @@ class OrderRiskPredictor:
         if features.get("value_to_shipping_ratio", 0) < 2:
             reasons.append("Low value-to-shipping ratio")
         # Geography
-        if features.get("region_order_volume", 1) < 0.1:
+        if has_region_input and features.get("region_order_volume", 1) < 0.1:
             reasons.append("Low-volume region (less delivery infrastructure)")
-        if not features.get("seller_customer_same_state", 0):
+        if has_cross_region_input and not features.get("seller_customer_same_state", 0):
             reasons.append("Cross-region delivery")
         # Product
-        if features.get("category_popularity", 1) < 0.05:
+        if has_category_input and features.get("category_popularity", 1) < 0.05:
             reasons.append("Niche product category (higher uncertainty)")
         if features.get("avg_photos", 1) < 1:
             reasons.append("Low product listing quality (few photos)")
@@ -126,8 +138,6 @@ class OrderRiskPredictor:
         # Delivery
         if features.get("estimated_delivery_days", 0) > 10:
             reasons.append("Long estimated delivery time")
-        if features.get("max_installments", 1) > 6:
-            reasons.append("High installment count (stretched payment)")
         return reasons
 
     def _get_recommendation(self, category: str) -> str:
