@@ -19,22 +19,56 @@ class MLService:
         self._segmentation_cache = None
         self._load_models()
 
+    def _get_model_source_dir(self):
+        """Return primary model dir, or backup dir when primary artifacts are missing."""
+        model_dir = settings.MODEL_DIR
+        backup_dir = model_dir / "backup"
+
+        has_primary = (
+            (model_dir / "risk_ensemble.joblib").exists()
+            or (model_dir / "risk_model.joblib").exists()
+        ) and (model_dir / "segmenter.joblib").exists() and (model_dir / "forecaster_models.joblib").exists()
+
+        if has_primary:
+            return model_dir
+
+        has_backup = (
+            (backup_dir / "risk_ensemble.joblib").exists()
+            or (backup_dir / "risk_model.joblib").exists()
+        ) and (backup_dir / "segmenter.joblib").exists() and (backup_dir / "forecaster_models.joblib").exists()
+
+        if has_backup:
+            logger.warning(
+                "Primary model artifacts missing in %s; loading from backup directory %s",
+                model_dir,
+                backup_dir,
+            )
+            return backup_dir
+
+        return model_dir
+
     def _load_models(self):
         """Attempt to load all trained models on startup."""
-        if self.predictor.load():
+        model_source_dir = self._get_model_source_dir()
+
+        if self.predictor.load(model_source_dir):
             logger.info("Risk prediction model loaded successfully")
         else:
-            logger.warning("Risk prediction model not found at %s", settings.MODEL_DIR / "risk_model.joblib")
+            logger.warning(
+                "Risk prediction model not found (looked for %s or %s)",
+                model_source_dir / "risk_ensemble.joblib",
+                model_source_dir / "risk_model.joblib",
+            )
 
-        if self.segmenter.load():
+        if self.segmenter.load(model_source_dir / "segmenter.joblib"):
             logger.info("Customer segmentation model loaded successfully")
         else:
-            logger.warning("Segmentation model not found at %s", settings.MODEL_DIR / "segmenter.joblib")
+            logger.warning("Segmentation model not found at %s", model_source_dir / "segmenter.joblib")
 
-        if self.forecaster.load():
+        if self.forecaster.load(model_source_dir):
             logger.info("Demand forecasting models loaded successfully")
         else:
-            logger.warning("Forecasting models not found at %s", settings.MODEL_DIR / "forecaster_models.joblib")
+            logger.warning("Forecasting models not found at %s", model_source_dir / "forecaster_models.joblib")
 
     # ── Order Risk Prediction ────────────────────────────────
 
@@ -43,7 +77,7 @@ class MLService:
         if not self.predictor._loaded:
             raise RuntimeError(
                 "Risk prediction model is not loaded. "
-                "Train the model first using the 02_risk_model.ipynb notebook."
+                "Train models first using train_all.py or the retrain endpoint."
             )
         return self.predictor.predict(order_data)
 
@@ -63,7 +97,7 @@ class MLService:
         if not self.segmenter._loaded:
             raise RuntimeError(
                 "Segmentation model is not loaded. "
-                "Train the model first using the 03_segmentation.ipynb notebook."
+                "Train models first using train_all.py or the retrain endpoint."
             )
         raise RuntimeError("No segmentation data cached. Run segmentation first.")
 
@@ -83,7 +117,7 @@ class MLService:
         if not self.forecaster._loaded:
             raise RuntimeError(
                 "Forecasting models are not loaded. "
-                "Train the model first using the 04_forecasting.ipynb notebook."
+                "Train models first using train_all.py or the retrain endpoint."
             )
         return self.forecaster.forecast(category=category, periods=periods)
 

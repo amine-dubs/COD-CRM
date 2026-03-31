@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Pin Turbopack root to this frontend app to avoid multi-lockfile root inference.
+  turbopack: {
+    root: __dirname,
+  },
+
   // Security headers
   async headers() {
     return [
