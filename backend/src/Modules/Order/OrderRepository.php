@@ -128,13 +128,17 @@ class OrderRepository
         $sortColumn = $sortableColumns[$sort] ?? 'o.created_at';
         $sortDirection = strtolower($direction) === 'asc' ? 'ASC' : 'DESC';
 
+        // Add LIMIT/OFFSET as parameters to prevent SQL injection
+        $params[] = (int)$perPage;
+        $params[] = (int)$offset;
+
         $data = $this->db->query(
             "SELECT o.*, w.name as wilaya_name
              FROM orders o
              LEFT JOIN wilayas w ON o.wilaya_id = w.id
              WHERE {$where}
              ORDER BY {$sortColumn} {$sortDirection}, o.id DESC
-             LIMIT {$perPage} OFFSET {$offset}",
+             LIMIT ? OFFSET ?",
             $params
         );
 

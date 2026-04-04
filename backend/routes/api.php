@@ -14,6 +14,8 @@ declare(strict_types=1);
 use App\Core\Middleware\AuthMiddleware;
 use App\Core\Middleware\TenantMiddleware;
 use App\Core\Middleware\RBACMiddleware;
+use App\Core\Middleware\CsrfMiddleware;
+use App\Core\Middleware\RateLimitMiddleware;
 use App\Modules\Auth\AuthController;
 use App\Modules\Store\StoreController;
 use App\Modules\User\UserController;
@@ -40,20 +42,20 @@ $router->get('/api/health', function () {
 });
 
 // ═══════════════════════════════════════════════════════════
-// Auth Routes (Public)
+// Auth Routes (Public, Rate Limited)
 // ═══════════════════════════════════════════════════════════
 
-$router->group('/api/v1/auth', [], function ($router) {
+$router->group('/api/v1/auth', [new RateLimitMiddleware()], function ($router) {
     $router->post('/register', [AuthController::class, 'register']);
     $router->post('/login',    [AuthController::class, 'login']);
     $router->post('/refresh',  [AuthController::class, 'refresh']);
 });
 
 // ═══════════════════════════════════════════════════════════
-// Protected Routes (Authenticated + Tenant-scoped)
+// Protected Routes (Authenticated + Tenant-scoped + CSRF)
 // ═══════════════════════════════════════════════════════════
 
-$router->group('/api/v1', [AuthMiddleware::class, TenantMiddleware::class], function ($router) {
+$router->group('/api/v1', [AuthMiddleware::class, TenantMiddleware::class, CsrfMiddleware::class], function ($router) {
 
     // ── Auth (Protected) ──────────────────────────────────
     $router->get('/auth/me',       [AuthController::class, 'me']);

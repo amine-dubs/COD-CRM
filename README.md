@@ -45,8 +45,17 @@ A production-ready, multi-tenant CRM SaaS platform for Algerian COD (Cash-on-Del
 
 ### ML Module
 - **Order Risk Prediction** — Optimized ensemble (CatBoost + LightGBM + XGBoost + ADASYN + Optuna) with 31 features. Olist dataset: AUC 0.9961, 98% failure recall. Adaptive: automatically re-optimizes with Optuna when retrained on company data.
-- **Customer Segmentation** — Hybrid clustering: HDBSCAN for large datasets (>=1000 customers), KMeans with auto-K for smaller datasets. RFM analysis with composite scoring (recency + frequency + monetary).
+  - **Existing Order Scoring**: Load orders from the database and get instant risk predictions
+  - **Workflow Actions**: Auto-approve (high confidence), Manual Review (medium), or Flag (high risk)
+  - **Optimal Threshold**: Uses Youden's J statistic (`sensitivity + specificity - 1`) to maximize failure detection while minimizing false positives
+- **Customer Segmentation** — Hybrid clustering with automatic algorithm selection:
+  - **Large datasets (≥1000 customers)**: HDBSCAN for density-based natural groupings
+  - **Smaller datasets (<1000 customers)**: KMeans with automatic K selection via silhouette score
+  - **RFM Analysis**: Recency, Frequency, Monetary features with composite scoring
+  - **5 Segments**: VIP, Loyal, Regular, At Risk, Lost
 - **Demand Forecasting** — LightGBM with 20 covariates including Algerian calendar events (Islamic: Ramadan, Eid al-Fitr, Eid al-Adha, Mawlid; National: New Year, Yennayer, Labour Day, Independence Day, Revolution Day)
+  - **Flexible Start Date**: Choose forecast start date (default: today, or any date after model training period)
+  - **Category Filtering**: Forecast by product category or aggregate
 - **AI Insights** — Google Gemini integration for multilingual business recommendations
 - **Model Retraining** — Retrain from your database with one click, or upload a custom CSV. Automatic Optuna hyperparameter optimization (40 Bayesian trials), backup and rollback
 
@@ -153,13 +162,42 @@ Trained on the Olist Brazilian E-Commerce dataset (97,712 orders, clean target: 
 | XGBoost | 0.9967 | 99.96% | 99.97% | 99.99% | 99.98% |
 | **Ensemble** | **0.9961** | **99.97%** | **99.97%** | **100.00%** | **99.99%** |
 
-Individual models are evaluated at their own F1-maximizing thresholds. The ensemble uses Youden's J statistic for optimal failure detection.
+#### Why Youden's J Statistic for Threshold Selection?
+
+For COD e-commerce, **detecting failed deliveries** (recalls, no-shows, cancellations) is more important than maximizing accuracy. We use **Youden's J statistic** (`J = sensitivity + specificity - 1`) instead of the default 0.5 threshold because:
+
+1. **Balanced optimization**: Maximizes the sum of true positive rate and true negative rate simultaneously
+2. **Business-appropriate**: In COD, a missed high-risk order costs more (failed delivery, return shipping, lost product) than flagging a good order for review
+3. **Class imbalance handling**: Works well with imbalanced datasets where failures are rare (~2-5% of orders)
+4. **Threshold stability**: More robust than F1-maximizing thresholds which can be sensitive to class distribution
+
+The optimal threshold is automatically computed during training from the ROC curve.
+
+#### Workflow Actions Based on Risk Score
+
+| Risk Score | Action | Description |
+|------------|--------|-------------|
+| 0-30% | ✅ Auto-Approve | Low risk — process automatically |
+| 30-70% | 👁️ Manual Review | Medium risk — requires human verification |
+| 70-100% | 🚫 Flag/Reject | High risk — recommend rejection or extra verification |
 
 **CRM database** (6K synthetic orders): Ensemble AUC 0.64, F1 0.74 — limited by synthetic data variance. With real company data (diverse orders, customers, regions), performance approaches the Olist benchmark.
 
 ### Customer Segmentation (Hybrid: HDBSCAN / KMeans)
 
-Adaptive algorithm: HDBSCAN for large datasets (>=1000 customers) where density-based clustering finds natural groups, KMeans with auto-K selection for smaller datasets where HDBSCAN would produce excessive noise. Both use RFM (Recency, Frequency, Monetary) features with StandardScaler and composite scoring.
+#### Adaptive Algorithm Selection
+
+The segmentation system automatically chooses the best clustering algorithm based on dataset size:
+
+| Dataset Size | Algorithm | Rationale |
+|--------------|-----------|-----------|
+| **≥1000 customers** | HDBSCAN | Density-based clustering finds natural, arbitrarily-shaped clusters without requiring K specification. Handles noise well. |
+| **<1000 customers** | KMeans | With smaller datasets, HDBSCAN produces excessive noise points. KMeans with automatic K selection (silhouette score optimization, K=2-6) provides stable segments. |
+
+Both algorithms use standardized RFM features:
+- **Recency**: Days since last purchase
+- **Frequency**: Total number of orders
+- **Monetary**: Total spending (DZD)
 
 **Olist dataset** (96,096 customers — HDBSCAN):
 
@@ -185,6 +223,25 @@ Benchmarked 5 covariate-aware models. LightGBM selected for best MAE and native 
 | **LightGBM + lags + holidays** | **318,741** | **416,501** | **+12.2%** |
 
 **20 covariates**: Islamic events — Ramadan, Eid al-Fitr (3d), Eid al-Adha (3d), Mawlid (via `hijri-converter`); National holidays — New Year (Jan 1), Yennayer (Jan 12), Labour Day (May 1), Independence Day (Jul 5), Revolution Day (Nov 1); `is_weekend` = Fri-Sat + all holidays; day of week, month, lags (1/7/14/28), rolling statistics (mean/std at 7/14/28 days).
+
+#### Flexible Forecast Start Date
+
+The forecasting API supports a **configurable start date** for generating predictions:
+
+```
+GET /api/forecast/demand?start_date=2026-05-01&periods=30&category=electronics
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `start_date` | Today | Forecast start date (YYYY-MM-DD). Must be ≥ model training end date. |
+| `periods` | 30 | Number of days to forecast (1-90) |
+| `category` | all | Product category filter or "all" for aggregate |
+
+This allows businesses to:
+- **Plan ahead**: Generate forecasts for future promotional periods
+- **Backtest**: Compare past forecasts against actual sales (for dates after model training)
+- **Scenario planning**: Project demand for specific date ranges
 
 ### Why Not Foundation Models (HuggingFace)?
 
@@ -346,6 +403,56 @@ Minimum 100 orders recommended. During retraining, Optuna runs 40 Bayesian trial
 | `docs/presentation.pptx` | Presentation slides (15 slides) |
 | `docs/diagrams/` | 5 architecture diagrams (Draw.io + PNG) |
 | `ml-service/notebooks/` | 4 Jupyter notebooks (EDA, risk model, segmentation, forecasting) |
+
+---
+
+## Security
+
+The platform implements multiple layers of security for production deployment:
+
+### Authentication & Authorization
+
+| Feature | Implementation |
+|---------|----------------|
+| **JWT Authentication** | Access tokens (1h) + Refresh tokens (7d) with secure rotation |
+| **Password Hashing** | bcrypt with cost factor 12 |
+| **RBAC** | 6 roles with granular permissions (Owner, Admin, Order Confirmator, Inventory Manager, Accountant, Delivery Manager) |
+| **Multi-tenancy** | `store_id` isolation — users can only access their store's data |
+| **ML API Auth** | API key authentication for ML service endpoints (X-API-Key header or Bearer token) |
+
+### Request Protection
+
+| Feature | Implementation |
+|---------|----------------|
+| **Rate Limiting** | 5 req/min for auth endpoints (brute-force protection), 60 req/min general API |
+| **CSRF Protection** | Custom `X-Requested-With` header validation on state-changing requests |
+| **SQL Injection** | Parameterized queries throughout (PDO prepared statements) |
+| **Input Validation** | Comprehensive validation with type checking, bounds, and regex patterns |
+| **File Upload** | 50MB limit, MIME type validation, path traversal prevention |
+
+### Frontend Security
+
+| Feature | Implementation |
+|---------|----------------|
+| **Protected Routes** | `AuthGuard` component — redirects unauthenticated users to login |
+| **Error Boundary** | Catches JavaScript errors to prevent app crashes |
+| **Token Storage** | Access token in cookie (httpOnly in production), refresh token in localStorage |
+| **XSS Prevention** | React's built-in escaping, no `dangerouslySetInnerHTML` |
+| **Security Headers** | X-Frame-Options: DENY, X-Content-Type-Options: nosniff |
+
+### Production Checklist
+
+Before deploying to production, ensure:
+
+- [ ] Change default super admin password (`Admin@123456`)
+- [ ] Generate strong `JWT_SECRET` (min 256 bits): `openssl rand -base64 32`
+- [ ] Set `ML_API_KEY` for ML service authentication
+- [ ] Set `APP_DEBUG=false` in backend `.env`
+- [ ] Remove or rotate exposed API keys (Gemini, etc.)
+- [ ] Deploy behind HTTPS with valid SSL certificate
+- [ ] Configure CORS allowed origins for production domains
+- [ ] Set up database backups and monitoring
+- [ ] Enable error logging to external service (e.g., Sentry)
 
 ---
 

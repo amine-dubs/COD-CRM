@@ -6,6 +6,7 @@
 // - JWT token auto-injection
 // - Store ID header
 // - Token refresh on 401
+// - CSRF protection via custom header
 // - Error normalization
 // ============================================================
 
@@ -55,6 +56,13 @@ apiClient.interceptors.request.use(
       const storeId = localStorage.getItem("store_id");
       if (storeId) {
         config.headers["X-Store-Id"] = storeId;
+      }
+
+      // CSRF protection: Add custom header that can't be set by forms
+      // This prevents CSRF because cross-origin requests with custom headers
+      // require CORS preflight, which the server controls
+      if (["post", "put", "patch", "delete"].includes(config.method?.toLowerCase() || "")) {
+        config.headers["X-Requested-With"] = "XMLHttpRequest";
       }
     }
 

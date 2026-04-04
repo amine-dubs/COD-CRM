@@ -72,6 +72,10 @@ class AdminRepository
         // Fetch stores with counts
         $offset = ($page - 1) * $perPage;
 
+        // Add LIMIT/OFFSET as parameters to prevent SQL injection
+        $params[] = (int)$perPage;
+        $params[] = (int)$offset;
+
         $stores = $this->db->query(
             "SELECT s.*,
                     (SELECT COUNT(*) FROM users u WHERE u.store_id = s.id) as users_count,
@@ -79,7 +83,7 @@ class AdminRepository
              FROM stores s
              {$whereClause}
              ORDER BY s.created_at DESC
-             LIMIT {$perPage} OFFSET {$offset}",
+             LIMIT ? OFFSET ?",
             $params
         );
 
@@ -138,6 +142,10 @@ class AdminRepository
         // Fetch
         $offset = ($page - 1) * $perPage;
 
+        // Add LIMIT/OFFSET as parameters to prevent SQL injection
+        $params[] = (int)$perPage;
+        $params[] = (int)$offset;
+
         $users = $this->db->query(
             "SELECT u.id, u.store_id, u.name, u.email, u.phone, u.role, u.status, u.last_login, u.created_at, u.updated_at,
                     s.name as store_name
@@ -145,7 +153,7 @@ class AdminRepository
              LEFT JOIN stores s ON s.id = u.store_id
              {$whereClause}
              ORDER BY u.created_at DESC
-             LIMIT {$perPage} OFFSET {$offset}",
+             LIMIT ? OFFSET ?",
             $params
         );
 

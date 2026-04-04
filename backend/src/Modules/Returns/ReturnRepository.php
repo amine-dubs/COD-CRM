@@ -50,13 +50,17 @@ class ReturnRepository
 
         $offset = ($page - 1) * $perPage;
 
+        // Add LIMIT/OFFSET as parameters to prevent SQL injection
+        $params[] = (int)$perPage;
+        $params[] = (int)$offset;
+
         $data = $this->db->query(
             "SELECT r.*, o.reference as order_reference, o.customer_name
              FROM returns r
              LEFT JOIN orders o ON r.order_id = o.id
              WHERE {$where}
              ORDER BY r.created_at DESC
-             LIMIT {$perPage} OFFSET {$offset}",
+             LIMIT ? OFFSET ?",
             $params
         );
 

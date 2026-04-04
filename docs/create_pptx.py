@@ -145,7 +145,7 @@ add_text_box(slide, Inches(1), Inches(6.5), Inches(11), Inches(0.5),
              "Projet de Fin d'Etudes  |  Specialite : Data Science  |  Annee 2024-2025",
              font_size=13, color=MED_GRAY, alignment=PP_ALIGN.CENTER)
 
-TOTAL_SLIDES = 15
+TOTAL_SLIDES = 16
 
 # ════════════════════════════════════════════════════════════
 # SLIDE 2: Plan / Agenda
@@ -730,7 +730,85 @@ add_bullet_slide_content(slide, format_items, Inches(7.0), Inches(5.0), Inches(5
 add_slide_number(slide, 14, TOTAL_SLIDES)
 
 # ════════════════════════════════════════════════════════════
-# SLIDE 15: Conclusion & Perspectives
+# SLIDE 15: Security & Workflow Actions
+# ════════════════════════════════════════════════════════════
+slide = prs.slides.add_slide(prs.slide_layouts[6])
+add_bg(slide, WHITE)
+add_shape(slide, Inches(0), Inches(0), Inches(0.15), SLIDE_H, ACCENT_RED)
+
+add_text_box(slide, Inches(0.7), Inches(0.5), Inches(10), Inches(0.8),
+             "Securite et Workflow Automatise", font_size=34, bold=True, color=DARK_BLUE)
+add_accent_bar(slide)
+
+# Left: Security measures
+left_box = add_rounded_shape(slide, Inches(0.5), Inches(2.0), Inches(6.0), Inches(4.8), LIGHT_GRAY, ACCENT_RED)
+left_box.line.width = Pt(2)
+
+add_text_box(slide, Inches(0.7), Inches(2.1), Inches(5.6), Inches(0.4),
+             "Mesures de securite", font_size=18, bold=True, color=ACCENT_RED)
+
+security_items = [
+    "Authentification : JWT + RBAC (6 roles) + cle API ML",
+    "Injection SQL : Requetes preparees (PDO parametrisees)",
+    "CSRF : Header X-Requested-With obligatoire",
+    "Rate Limiting : 5 req/min (auth), 60/min (general)",
+    "Upload : Limite 50 Mo, validation MIME, anti-path traversal",
+    "Debug : APP_DEBUG=false en production",
+    "Multi-tenant : Isolation stricte par store_id",
+]
+add_bullet_slide_content(slide, security_items, Inches(0.7), Inches(2.6), Inches(5.6), font_size=13, spacing=Pt(3))
+
+# Right top: Workflow actions
+right_box = add_rounded_shape(slide, Inches(6.8), Inches(2.0), Inches(6.0), Inches(2.5), LIGHT_GRAY, ACCENT_GREEN)
+right_box.line.width = Pt(2)
+
+add_text_box(slide, Inches(7.0), Inches(2.1), Inches(5.6), Inches(0.4),
+             "Actions de workflow automatisees", font_size=18, bold=True, color=ACCENT_GREEN)
+
+# Workflow table header
+workflow_headers = ["Score", "Action", "Description"]
+for i, h in enumerate(workflow_headers):
+    w = Inches(1.2) if i == 0 else Inches(1.5) if i == 1 else Inches(2.9)
+    x = Inches(7.0) + sum([Inches(1.2), Inches(1.5), Inches(0)][:i])
+    add_shape(slide, x, Inches(2.55), w, Inches(0.35), DARK_BLUE)
+    add_text_box(slide, x, Inches(2.57), w, Inches(0.3),
+                 h, font_size=11, bold=True, color=WHITE, alignment=PP_ALIGN.CENTER)
+
+# Workflow table rows
+workflow_rows = [
+    ("70-100%", "Auto-Approve", "Risque faible - traitement auto", ACCENT_GREEN),
+    ("30-70%", "Revue manuelle", "Verification humaine requise", ACCENT_ORANGE),
+    ("0-30%", "Signalement", "Rejet recommande", ACCENT_RED),
+]
+for row_idx, (score, action, desc, color) in enumerate(workflow_rows):
+    y = Inches(2.95) + Inches(0.4) * row_idx
+    add_shape(slide, Inches(7.0), y, Inches(1.2), Inches(0.35), WHITE, color)
+    add_text_box(slide, Inches(7.0), y + Pt(2), Inches(1.2), Inches(0.3),
+                 score, font_size=10, bold=True, color=color, alignment=PP_ALIGN.CENTER)
+    add_text_box(slide, Inches(8.2), y + Pt(2), Inches(1.5), Inches(0.3),
+                 action, font_size=10, color=DARK_GRAY, alignment=PP_ALIGN.CENTER)
+    add_text_box(slide, Inches(9.7), y + Pt(2), Inches(2.9), Inches(0.3),
+                 desc, font_size=10, color=MED_GRAY, alignment=PP_ALIGN.CENTER)
+
+# Right bottom: Youden explanation
+youden_box = add_rounded_shape(slide, Inches(6.8), Inches(4.7), Inches(6.0), Inches(2.1), RGBColor(0xFD, 0xF2, 0xE9), ACCENT_ORANGE)
+youden_box.line.width = Pt(2)
+
+add_text_box(slide, Inches(7.0), Inches(4.8), Inches(5.6), Inches(0.4),
+             "Seuil optimal : Youden's J statistic", font_size=14, bold=True, color=ACCENT_ORANGE)
+
+youden_items = [
+    "J = Sensibilite + Specificite - 1",
+    "Maximise simultanement vrais positifs et negatifs",
+    "Adapte au desequilibre de classes (2-3% echecs)",
+    "Seuil calcule : 0.9805 (cours ROC)",
+]
+add_bullet_slide_content(slide, youden_items, Inches(7.0), Inches(5.2), Inches(5.6), font_size=11, color=DARK_GRAY, spacing=Pt(1))
+
+add_slide_number(slide, 15, TOTAL_SLIDES)
+
+# ════════════════════════════════════════════════════════════
+# SLIDE 16: Conclusion & Perspectives
 # ════════════════════════════════════════════════════════════
 slide = prs.slides.add_slide(prs.slide_layouts[6])
 add_bg(slide, DARK_BLUE)
@@ -746,26 +824,26 @@ add_text_box(slide, Inches(0.7), Inches(1.7), Inches(5.5), Inches(0.4),
 
 contributions = [
     "CRM complet : 12 tables, 11 modules, multi-tenant",
-    "Ensemble ML (CatBoost+LightGBM+XGBoost + ADASYN + Optuna) : AUC = 0.9961, Rappel(echecs) = 98%",
-    "31 features enrichies (8 categories), seuils F1-max par modele + Youden (ensemble)",
-    "Segmentation hybride : HDBSCAN (gros volumes) / KMeans (petits volumes), RFM auto-etiquete",
-    "Prevision LightGBM + Calendrier algerien (islamique + national) : MAE 318K DZD (+12.2% vs baseline)",
-    "Reentrainement automatique depuis la BDD + Optuna auto-tuning",
-    "Interface multilingue complete (AR/FR/EN + RTL) + integration LLM Gemini",
+    "Ensemble ML (AUC=0.9961) : seuil Youden optimal, rappel echecs 98%",
+    "Workflow automatise : auto-approve / revue manuelle / signalement",
+    "Segmentation hybride HDBSCAN/KMeans adaptative selon taille BDD",
+    "Prevision LightGBM + Calendrier algerien + date de depart flexible",
+    "Securite : JWT+RBAC, rate limiting, CSRF, requetes preparees",
+    "Interface multilingue (AR/FR/EN + RTL) + LLM Gemini",
 ]
-add_bullet_slide_content(slide, contributions, Inches(0.7), Inches(2.2), Inches(5.8), font_size=15, color=LIGHT_GRAY, spacing=Pt(4))
+add_bullet_slide_content(slide, contributions, Inches(0.7), Inches(2.2), Inches(5.8), font_size=14, color=LIGHT_GRAY, spacing=Pt(3))
 
 # Perspectives
 add_text_box(slide, Inches(7.0), Inches(1.7), Inches(5.5), Inches(0.4),
              "Perspectives", font_size=22, bold=True, color=ACCENT_ORANGE)
 
 perspectives = [
-    "Deploiement sur donnees reelles algeriennes (un clic)",
-    "Calendrier algerien complet integre (islamique + national)",
+    "Deploiement sur donnees reelles algeriennes",
+    "Evenements commerciaux (rentree, promotions)",
     "Apprentissage en ligne (mise a jour continue)",
     "A/B testing de l'impact des recommandations ML",
 ]
-add_bullet_slide_content(slide, perspectives, Inches(7.0), Inches(2.2), Inches(5.8), font_size=15, color=LIGHT_GRAY, spacing=Pt(4))
+add_bullet_slide_content(slide, perspectives, Inches(7.0), Inches(2.2), Inches(5.8), font_size=14, color=LIGHT_GRAY, spacing=Pt(3))
 
 # Thank you
 add_shape(slide, Inches(3.5), Inches(5.5), Inches(6.3), Inches(1.5), ACCENT_BLUE)
@@ -774,7 +852,7 @@ add_text_box(slide, Inches(3.5), Inches(5.7), Inches(6.3), Inches(0.6),
 add_text_box(slide, Inches(3.5), Inches(6.3), Inches(6.3), Inches(0.4),
              "Questions ?", font_size=18, color=LIGHT_GRAY, alignment=PP_ALIGN.CENTER)
 
-add_slide_number(slide, 15, TOTAL_SLIDES)
+add_slide_number(slide, 16, TOTAL_SLIDES)
 
 # ════════════════════════════════════════════════════════════
 # SAVE

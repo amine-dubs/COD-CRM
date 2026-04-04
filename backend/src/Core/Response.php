@@ -48,7 +48,7 @@ class Response
         return new self(null, 204);
     }
 
-    public static function error(string $message, int $statusCode = 400, array $errors = []): self
+    public static function error(string $message, int $statusCode = 400, array $errors = [], array $headers = []): self
     {
         $body = [
             'success' => false,
@@ -57,7 +57,11 @@ class Response
         if (!empty($errors)) {
             $body['errors'] = $errors;
         }
-        return self::json($body, $statusCode);
+        $response = self::json($body, $statusCode);
+        foreach ($headers as $name => $value) {
+            $response = $response->withHeader($name, $value);
+        }
+        return $response;
     }
 
     public static function notFound(string $message = 'Resource not found'): self

@@ -50,9 +50,13 @@ class UserRepository
         $total = $this->db->count('users', $where, $params);
         $offset = ($page - 1) * $perPage;
 
+        // Add LIMIT/OFFSET as parameters to prevent SQL injection
+        $params[] = (int)$perPage;
+        $params[] = (int)$offset;
+
         $data = $this->db->query(
             "SELECT id, store_id, name, email, phone, role, status, created_at, updated_at
-             FROM users WHERE {$where} ORDER BY created_at DESC LIMIT {$perPage} OFFSET {$offset}",
+             FROM users WHERE {$where} ORDER BY created_at DESC LIMIT ? OFFSET ?",
             $params
         );
 

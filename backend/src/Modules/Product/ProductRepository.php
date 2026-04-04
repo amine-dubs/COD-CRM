@@ -54,13 +54,17 @@ class ProductRepository
 
         $offset = ($page - 1) * $perPage;
 
+        // Add LIMIT/OFFSET as parameters to prevent SQL injection
+        $params[] = (int)$perPage;
+        $params[] = (int)$offset;
+
         $data = $this->db->query(
             "SELECT p.*, COALESCE(i.quantity, 0) as stock_quantity
              FROM products p
              LEFT JOIN inventory i ON p.id = i.product_id AND i.store_id = p.store_id
              WHERE {$where}
              ORDER BY p.created_at DESC
-             LIMIT {$perPage} OFFSET {$offset}",
+             LIMIT ? OFFSET ?",
             $params
         );
 

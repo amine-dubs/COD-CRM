@@ -4,14 +4,34 @@ import shutil
 from pathlib import Path
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File, Depends
 from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.services.ml_service import ml_service
+from app.middleware.auth import verify_api_key
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_api_key)])
 logger = logging.getLogger(__name__)
+
+# File upload limits
+MAX_FILE_SIZE_MB = 50
+MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024
+
+
+def _validate_filename(filename: str) -> str:
+    """Validate and sanitize filename to prevent path traversal attacks."""
+    if not filename:
+        return "upload.csv"
+    
+    # Remove path separators and other dangerous characters
+    sanitized = filename.replace("/", "").replace("\\", "").replace("..", "")
+    
+    # Ensure it ends with .csv
+    if not sanitized.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Only CSV files are accepted.")
+    
+    return sanitized
 
 
 @router.post("/upload-and-train")
@@ -33,15 +53,43 @@ async def retrain_from_csv(file: UploadFile = File(...)):
 
     After training, models are saved and auto-reloaded.
     Previous models are backed up to trained_models/backup/.
+    
+    Limits:
+      - Max file size: 50 MB
+      - Accepted formats: .csv only
     """
-    if not file.filename.endswith(".csv"):
-        raise HTTPException(status_code=400, detail="Only CSV files are accepted.")
+    # Validate filename (prevent path traversal)
+    _validate_filename(file.filename or "")
+    
+    # Validate content type if provided
+    if file.content_type and "csv" not in file.content_type.lower() and "text" not in file.content_type.lower():
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid content type: {file.content_type}. Only CSV files are accepted."
+        )
 
     try:
-        # Read uploaded CSV
+        # Read and validate file size
         content = await file.read()
+        if len(content) > MAX_FILE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large. Maximum size is {MAX_FILE_SIZE_MB} MB."
+            )
+        
+        if len(content) == 0:
+            raise HTTPException(status_code=400, detail="Empty file uploaded.")
+        
+        # Parse CSV
         import io
-        df = pd.read_csv(io.BytesIO(content))
+        try:
+            df = pd.read_csv(io.BytesIO(content))
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Failed to parse CSV file: {str(e)}"
+            )
+        
         logger.info(f"Received CSV: {len(df)} rows, {len(df.columns)} columns")
 
         # Validate required columns

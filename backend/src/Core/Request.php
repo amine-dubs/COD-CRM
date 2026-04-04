@@ -21,6 +21,7 @@ class Request
     private array $params; // route params injected by Router
     private ?int $storeId;
     private ?array $authUser;
+    private array $rateLimitHeaders = [];
 
     public function __construct(
         string $method,
@@ -174,5 +175,34 @@ class Request
     public function authUserRole(): ?string
     {
         return $this->authUser['role'] ?? null;
+    }
+
+    // ── Rate Limit Headers ───────────────────────────────────
+
+    public function getRateLimitHeaders(): array
+    {
+        return $this->rateLimitHeaders;
+    }
+
+    public function setRateLimitHeaders(array $headers): void
+    {
+        $this->rateLimitHeaders = $headers;
+    }
+
+    // ── Additional Getters for Middleware ─────────────────────
+
+    public function getMethod(): string
+    {
+        return $this->method;
+    }
+
+    public function getPath(): string
+    {
+        return $this->path;
+    }
+
+    public function getHeader(string $key, ?string $default = null): ?string
+    {
+        return $this->header($key, $default);
     }
 }

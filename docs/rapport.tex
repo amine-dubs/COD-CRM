@@ -5,6 +5,7 @@
 % ══════════════════════════════════════════════════════════════
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
+\usepackage{lmodern}
 \usepackage[french]{babel}
 \usepackage{geometry}
 \usepackage{graphicx}
@@ -79,6 +80,7 @@
 % ── Headers/Footers ──
 \pagestyle{fancy}
 \fancyhf{}
+\setlength{\headheight}{40pt}
 \fancyhead[L]{\leftmark}
 \fancyhead[R]{\thepage}
 \renewcommand{\headrulewidth}{0.4pt}
@@ -857,9 +859,21 @@ Concr\`{e}tement, le mod\`{e}le optimis\'{e} d\'{e}tecte \textbf{242 des 247 com
 
 Ce r\'{e}sultat est particuli\`{e}rement significatif pour le contexte COD alg\'{e}rien : le mod\`{e}le identifie quasi-parfaitement les commandes \`{a} risque d'\'{e}chec, permettant aux agents de se concentrer exclusivement sur les commandes n\'{e}cessitant une v\'{e}rification.
 
+\subsection{Scoring des commandes existantes}
+
+Au-del\`{a} de la pr\'{e}diction de nouvelles commandes, le syst\`{e}me permet \'{e}galement de charger et d'analyser des commandes d\'{e}j\`{a} enregistr\'{e}es dans le CRM. Cette fonctionnalit\'{e} est utile dans plusieurs cas de figure :
+
+\begin{itemize}
+  \item \textbf{Audit r\'{e}trospectif} : Analyser le risque de commandes pass\'{e}es pour identifier des patterns d'\'{e}chec
+  \item \textbf{Re-scoring apr\`{e}s r\'{e}entra\^{i}nement} : Apr\`{e}s mise \`{a} jour du mod\`{e}le, recalculer les scores des commandes en attente
+  \item \textbf{Analyse de cohorte} : Identifier les commandes \`{a} haut risque parmi un lot de commandes r\'{e}centes
+\end{itemize}
+
+L'interface permet de s\'{e}lectionner une commande existante par son identifiant ou de charger un lot de commandes depuis la base de donn\'{e}es. Le syst\`{e}me enrichit automatiquement les donn\'{e}es avec l'historique client (commandes pr\'{e}c\'{e}dentes, taux de succ\`{e}s, montant cumul\'{e}) avant d'appliquer le mod\`{e}le de scoring.
+
 \subsection{Cat\'{e}gories de risque et aide \`{a} la d\'{e}cision}
 
-Le score de risque (0--100) est traduit en cat\'{e}gories actionnables :
+Le score de succ\`{e}s (0--100) est traduit en cat\'{e}gories actionnables. Un score de 100 indique une commande \`{a} tr\`{e}s faible risque, tandis qu'un score proche de 0 signale un risque d'\'{e}chec \'{e}lev\'{e}.
 
 \begin{table}[H]
 \centering
@@ -869,20 +883,73 @@ Le score de risque (0--100) est traduit en cat\'{e}gories actionnables :
 \toprule
 \textbf{Score} & \textbf{Cat\'{e}gorie} & \textbf{Action recommand\'{e}e} \\
 \midrule
-0--25 & Critique & V\'{e}rifier le client par t\'{e}l\'{e}phone. Confirmer l'adresse. \\
-25--50 & \'{E}lev\'{e} & Appel de confirmation prioritaire. \\
-50--75 & Moyen & Traitement standard, surveillance accrue. \\
-75--100 & Faible & Proc\'{e}der normalement. \\
+0--30 & Critique & V\'{e}rifier le client par t\'{e}l\'{e}phone. Confirmer l'adresse. \\
+30--50 & \'{E}lev\'{e} & Appel de confirmation prioritaire. \\
+50--70 & Moyen & Traitement standard, surveillance accrue. \\
+70--100 & Faible & Proc\'{e}der normalement. \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
+\subsection{Actions automatis\'{e}es du workflow}
+
+Le syst\`{e}me traduit les scores de risque en actions concr\`{e}tes pour le workflow de commande. Cette automatisation permet aux agents de se concentrer sur les cas vraiment probl\'{e}matiques au lieu de traiter toutes les commandes de mani\`{e}re uniforme.
+
+\begin{table}[H]
+\centering
+\caption{Actions de workflow selon le score de succ\`{e}s}
+\label{tab:workflow_actions}
+\begin{tabularx}{\textwidth}{l l l X}
+\toprule
+\textbf{Score} & \textbf{Action} & \textbf{Ic\^{o}ne} & \textbf{Description} \\
+\midrule
+70--100\% & Approbation auto & \checkmark & Risque faible --- traitement automatique sans intervention \\
+30--70\% & Revue manuelle & \textbf{!} & Risque mod\'{e}r\'{e} --- n\'{e}cessite v\'{e}rification humaine \\
+0--30\% & Signalement & $\times$ & Risque \'{e}lev\'{e} --- rejet recommand\'{e} ou v\'{e}rification approfondie \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Pourquoi la statistique J de Youden ?}
+
+Pour les commandes COD, d\'{e}tecter les \'{e}checs de livraison (retours, absences, annulations) importe davantage que maximiser la pr\'{e}cision globale. Le seuil standard de 0.5 n'est pas adapt\'{e} \`{a} notre contexte d\'{e}s\'{e}quilibr\'{e} o\`{u} les \'{e}checs repr\'{e}sentent seulement 2--3\% des commandes.
+
+La \textbf{statistique J de Youden} ($J = \mathrm{TPR} + \mathrm{TNR} - 1$), exprim\'{e}e en termes m\'{e}tiers par sensibilit\'{e} + sp\'{e}cificit\'{e} - 1, offre plusieurs avantages :
+
+\begin{enumerate}
+  \item \textbf{Optimisation \'{e}quilibr\'{e}e} : Elle maximise simultan\'{e}ment le taux de vrais positifs et de vrais n\'{e}gatifs, trouvant le meilleur compromis entre d\'{e}tection et fausses alertes.
+  
+  \item \textbf{Adapt\'{e}e au co\^{u}t m\'{e}tier} : Dans le COD alg\'{e}rien, un \'{e}chec manqu\'{e} co\^{u}te cher (livraison \'{e}chou\'{e}e, frais de retour, produit immobilis\'{e}). Mieux vaut signaler une commande l\'{e}gitime pour v\'{e}rification que manquer un \'{e}chec probable.
+  
+  \item \textbf{Robustesse au d\'{e}s\'{e}quilibre} : Contrairement aux seuils optimisant le F1-Score qui peuvent \^{e}tre sensibles \`{a} la distribution des classes, J de Youden reste stable face aux d\'{e}s\'{e}quilibres s\'{e}v\`{e}res.
+\end{enumerate}
+
+Le seuil optimal est calcul\'{e} automatiquement \`{a} partir de la courbe ROC lors de l'entra\^{i}nement. Sur les donn\'{e}es Olist, ce seuil est de \textbf{0.9805}, ce qui signifie que seules les commandes avec une probabilit\'{e} de succ\`{e}s sup\'{e}rieure \`{a} 98\% sont consid\'{e}r\'{e}es comme s\^{u}res.
 
 
 \section{Segmentation client — Approche hybride}
 
 \subsection{M\'{e}thodologie}
 
-La segmentation utilise l'analyse RFM (Recency, Frequency, Monetary) comme features d'entr\'{e}e. Le syst\`{e}me s\'{e}lectionne automatiquement l'algorithme optimal selon la taille du jeu de donn\'{e}es :
+La segmentation utilise l'analyse RFM (Recency, Frequency, Monetary) comme features d'entr\'{e}e. Plut\^{o}t qu'imposer un algorithme unique, le syst\`{e}me s\'{e}lectionne automatiquement la m\'{e}thode la plus adapt\'{e}e selon la taille du jeu de donn\'{e}es --- un choix fond\'{e} sur les forces et faiblesses de chaque algorithme.
+
+\subsubsection{Pourquoi deux algorithmes ?}
+
+\begin{table}[H]
+\centering
+\caption{S\'{e}lection automatique de l'algorithme selon la taille du dataset}
+\label{tab:algo_selection}
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\textbf{Taille} & \textbf{Algorithme} & \textbf{Justification} \\
+\midrule
+$\geq$ 1000 clients & HDBSCAN & Trouve des clusters de formes arbitraires, sans n\'{e}cessiter de sp\'{e}cifier $K$. G\`{e}re bien le bruit et les outliers. \\
+$<$ 1000 clients & KMeans & Avec peu de donn\'{e}es, HDBSCAN produit trop de points de bruit (parfois $>$50\%). KMeans avec recherche automatique de $K$ (silhouette) donne des segments stables. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{Pipeline de segmentation}
 
 \begin{enumerate}
   \item Calcul des m\'{e}triques RFM pour chaque client
@@ -913,7 +980,7 @@ Standard & 88~994 & 92,6\% & Clients occasionnels (majorit\'{e}) \\
 \end{tabularx}
 \end{table}
 
-\textbf{Donn\'{e}es CRM} (400 clients) — KMeans ($K=3$, silhouette = 0.485, Davies-Bouldin = 0.80) a identifi\'{e} 3 segments : VIP (5\%), Standard (15\%), Fid\`{e}le (80\%).
+\textbf{Donn\'{e}es CRM synth\'{e}tiques} (400 clients) — Le syst\`{e}me a automatiquement bascul\'{e} sur KMeans ($K=3$, silhouette = 0.485, Davies-Bouldin = 0.80) et a identifi\'{e} 3 segments : VIP (5\%), Standard (15\%), Fid\`{e}le (80\%).
 
 \subsection{Interpr\'{e}tation pour l'aide \`{a} la d\'{e}cision}
 
@@ -1025,6 +1092,26 @@ sports\_leisure & Sports et loisirs \\
 \end{tabularx}
 \end{table}
 
+\subsection{Date de d\'{e}part flexible pour la pr\'{e}vision}
+
+Une fonctionnalit\'{e} particuli\`{e}rement utile est la possibilit\'{e} de sp\'{e}cifier une date de d\'{e}part pour la pr\'{e}vision. Par d\'{e}faut, le mod\`{e}le pr\'{e}dit \`{a} partir du dernier jour des donn\'{e}es d'entra\^{i}nement. Cependant, l'API accepte un param\`{e}tre \texttt{start\_date} qui permet :
+
+\begin{itemize}
+  \item \textbf{Pr\'{e}vision dans le pass\'{e} (backtesting)} : En sp\'{e}cifiant une date ant\'{e}rieure, on peut comparer les pr\'{e}dictions aux valeurs r\'{e}elles pour \'{e}valuer la pr\'{e}cision du mod\`{e}le sur une p\'{e}riode donn\'{e}e.
+  
+  \item \textbf{Pr\'{e}vision dans le futur} : En sp\'{e}cifiant une date ult\'{e}rieure, on peut simuler des sc\'{e}narios futurs, par exemple pour planifier les stocks avant le Ramadan.
+  
+  \item \textbf{Planification \'{e}v\'{e}nementielle} : L'utilisateur peut demander ``que se passe-t-il si je pr\'{e}vois les ventes \`{a} partir du 1\textsuperscript{er} Ramadan ?'' et le mod\`{e}le int\'{e}grera automatiquement les covariables du calendrier islamique.
+\end{itemize}
+
+\lstset{language=Python}
+\begin{lstlisting}[caption={Exemple d'appel API avec date de d\'{e}part personnalis\'{e}e}]
+# Prevision a partir du 1er mars 2024
+GET /api/forecast/demand?periods=30&start_date=2024-03-01
+# Le modele utilisera les lags et rolling statistics
+# calcules sur les donnees disponibles jusqu'au 28 fevrier
+\end{lstlisting}
+
 \subsection{Pourquoi les mod\`{e}les fondamentaux (HuggingFace) ne sont pas adapt\'{e}s}
 
 Les mod\`{e}les fondamentaux de s\'{e}ries temporelles tels que TimesFM (Google), Chronos-Large (Amazon), MOIRAI (Salesforce) et Lag-Llama sont con\c{c}us pour la pr\'{e}vision \textit{zero-shot} --- ils ne prennent pas en entr\'{e}e de covariables exog\`{e}nes. Or, notre avantage comp\'{e}titif repose pr\'{e}cis\'{e}ment sur l'int\'{e}gration du \textbf{calendrier alg\'{e}rien} (islamique + national) comme covariable pour le march\'{e} alg\'{e}rien.
@@ -1073,6 +1160,68 @@ Insights NL & G\'{e}n\'{e}ratif & Google Gemini & Multilingue (AR/FR/EN) \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
+
+% ══════════════════════════════════════════════════════════════
+% SECURITE
+% ══════════════════════════════════════════════════════════════
+\section{S\'{e}curit\'{e} et protection des donn\'{e}es}
+
+La s\'{e}curit\'{e} d'un CRM manipulant des donn\'{e}es clients sensibles (coordonn\'{e}es, historique d'achats, scores de risque) est primordiale. Plusieurs m\'{e}canismes de protection ont \'{e}t\'{e} impl\'{e}ment\'{e}s \`{a} diff\'{e}rents niveaux de l'architecture.
+
+\subsection{Authentification et autorisation}
+
+\begin{table}[H]
+\centering
+\caption{M\'{e}canismes d'authentification par couche}
+\label{tab:security_auth}
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\textbf{Couche} & \textbf{M\'{e}canisme} & \textbf{Impl\'{e}mentation} \\
+\midrule
+Backend PHP & JWT + RBAC & Tokens sign\'{e}s avec 6 r\^{o}les (super\_admin, store\_admin, call\_agent, etc.). Expiration configurable. \\
+Service ML & Cl\'{e} API & Header \texttt{X-API-Key} ou token Bearer. Cl\'{e} configurable dans les variables d'environnement. \\
+Frontend & AuthGuard & V\'{e}rification du token \`{a} chaque navigation. Redirection automatique vers la page de connexion si expir\'{e}. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Protection contre les attaques courantes}
+
+\begin{table}[H]
+\centering
+\caption{Protections impl\'{e}ment\'{e}es contre les attaques web}
+\label{tab:security_protections}
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\textbf{Attaque} & \textbf{Protection} & \textbf{D\'{e}tail} \\
+\midrule
+Injection SQL & Requ\^{e}tes pr\'{e}par\'{e}es & Tous les param\`{e}tres utilisateur (y compris LIMIT/OFFSET) sont param\'{e}tr\'{e}s via PDO. \\
+CSRF & Header X-Requested-With & Le middleware v\'{e}rifie la pr\'{e}sence de \texttt{X-Requested-With: XMLHttpRequest} pour les requ\^{e}tes \'{e}tat-modifiantes. \\
+Brute force & Rate limiting & Limite de 5 requ\^{e}tes/min sur les endpoints d'authentification, 60/min pour les autres routes. \\
+XSS & Sanitisation React & Le frontend React \'{e}chappe automatiquement les variables dans le JSX. \\
+Upload malveillant & Validation stricte & Limite de 50 Mo, v\'{e}rification du type MIME, protection contre path traversal (blocage de \texttt{..}). \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Bonnes pratiques de d\'{e}ploiement}
+
+Pour un d\'{e}ploiement en production, plusieurs recommandations ont \'{e}t\'{e} document\'{e}es :
+
+\begin{itemize}
+  \item \textbf{Variables d'environnement} : Les cl\'{e}s API (Gemini, ML\_API\_KEY), secrets JWT et identifiants de base de donn\'{e}es ne sont jamais commit\'{e}s dans le code source. Seuls des fichiers \texttt{.env.example} avec des placeholders sont fournis.
+  
+  \item \textbf{Mode debug d\'{e}sactiv\'{e}} : \texttt{APP\_DEBUG=false} emp\^{e}che l'affichage des traces d'erreur en production.
+  
+  \item \textbf{HTTPS obligatoire} : Le frontend et les API doivent \^{e}tre servis via HTTPS en production pour prot\'{e}ger les tokens en transit.
+  
+  \item \textbf{Isolation multi-tenant} : Chaque requ\^{e}te est filtr\'{e}e par \texttt{store\_id} pour garantir qu'un utilisateur ne peut acc\'{e}der qu'aux donn\'{e}es de son propre magasin.
+  
+  \item \textbf{Mot de passe super admin} : Le mot de passe par d\'{e}faut doit \^{e}tre chang\'{e} imm\'{e}diatement apr\`{e}s la premi\`{e}re connexion.
+\end{itemize}
+
+Ces mesures constituent un socle de s\'{e}curit\'{e} solide, m\^{e}me si un audit de s\'{e}curit\'{e} professionnel reste recommand\'{e} avant un d\'{e}ploiement \`{a} grande \'{e}chelle.
 
 
 % ══════════════════════════════════════════════════════════════

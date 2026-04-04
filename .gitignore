@@ -71,3 +71,9 @@ docs/*.synctex.gz
 
 # Generated seed data (regenerate with ml-service/generate_data.py)
 seed_data.sql
+
+# Ignore environment files
+*.env
+.env
+.env.local
+.env.*

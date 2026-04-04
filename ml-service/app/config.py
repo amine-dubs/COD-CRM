@@ -21,6 +21,9 @@ class Settings:
     # Google Gemini
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
 
+    # API Authentication (empty = disabled, for dev; set in production)
+    ML_API_KEY: str = os.getenv("ML_API_KEY", "")
+
     # Paths
     BASE_DIR: Path = _BASE_DIR
     MODEL_DIR: Path = Path(os.getenv("MODEL_DIR", str(Path(__file__).resolve().parent.parent / "trained_models")))

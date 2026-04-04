@@ -67,6 +67,10 @@ class DeliveryRepository
 
         $offset = ($page - 1) * $perPage;
 
+        // Add LIMIT/OFFSET as parameters to prevent SQL injection
+        $params[] = (int)$perPage;
+        $params[] = (int)$offset;
+
         $data = $this->db->query(
             "SELECT d.*, o.reference as order_reference, o.customer_name, w.name as wilaya_name
              FROM deliveries d
@@ -74,7 +78,7 @@ class DeliveryRepository
              LEFT JOIN wilayas w ON o.wilaya_id = w.id
              WHERE {$where}
              ORDER BY d.created_at DESC
-             LIMIT {$perPage} OFFSET {$offset}",
+             LIMIT ? OFFSET ?",
             $params
         );
 
