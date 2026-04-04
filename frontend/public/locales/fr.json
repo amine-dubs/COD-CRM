@@ -413,7 +413,7 @@
   "ai.existing_order_source_label": "Utiliser une commande existante (optionnel)",
   "ai.existing_order_select": "Sélectionner une commande existante",
   "ai.existing_order_load": "Charger la commande dans le formulaire",
-  "ai.existing_order_hint": "Pré-remplissez à partir d'une commande réelle, puis ajustez les valeurs si nécessaire.",
+  "ai.existing_order_hint": "Pré-remplissez à partir d'une commande réelle (montants, catégorie, historique client), puis ajustez si nécessaire.",
   "ai.existing_order_loading": "Chargement des commandes récentes...",
   "ai.existing_order_load_failed": "Échec du chargement de la commande sélectionnée",
   "ai.product_category_hint": "Choisissez une catégorie existante ou saisissez-en une nouvelle.",

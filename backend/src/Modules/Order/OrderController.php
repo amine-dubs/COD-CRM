@@ -39,6 +39,22 @@ class OrderController
     }
 
     /**
+     * GET /api/v1/orders/customer-profile?phone=...
+     */
+    public function customerProfile(Request $request): Response
+    {
+        $phone = trim((string)$request->query('phone', ''));
+        if ($phone === '') {
+            return Response::validationError([
+                'phone' => ['phone query parameter is required.'],
+            ]);
+        }
+
+        $profile = $this->service->getCustomerProfileByPhone($request->storeId(), $phone);
+        return Response::success($profile);
+    }
+
+    /**
      * GET /api/v1/orders/{id}
      */
     public function show(Request $request): Response

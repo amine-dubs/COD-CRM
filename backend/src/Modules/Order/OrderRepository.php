@@ -29,12 +29,34 @@ class OrderRepository
     public function getOrderItems(int $orderId): array
     {
         return $this->db->query(
-            'SELECT oi.*, p.name as product_name, p.sku
+            'SELECT oi.*, p.name as product_name, p.sku, p.category as product_category
              FROM order_items oi
              LEFT JOIN products p ON oi.product_id = p.id
              WHERE oi.order_id = ?',
             [$orderId]
         );
+    }
+
+    public function getCustomerProfileByPhone(int $storeId, string $phone): array
+    {
+        $row = $this->db->queryOne(
+            'SELECT
+                COUNT(*) as order_count,
+                COALESCE(SUM(total_amount), 0) as total_spent,
+                COALESCE(AVG(total_amount), 0) as avg_order_value,
+                MAX(created_at) as last_order_at
+             FROM orders
+             WHERE store_id = ? AND (customer_phone = ? OR customer_phone_2 = ?)',
+            [$storeId, $phone, $phone]
+        );
+
+        return [
+            'phone' => $phone,
+            'order_count' => (int)($row['order_count'] ?? 0),
+            'total_spent' => (float)($row['total_spent'] ?? 0),
+            'avg_order_value' => (float)($row['avg_order_value'] ?? 0),
+            'last_order_at' => $row['last_order_at'] ?? null,
+        ];
     }
 
     public function getStatusHistory(int $orderId): array

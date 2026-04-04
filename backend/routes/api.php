@@ -76,6 +76,7 @@ $router->group('/api/v1', [AuthMiddleware::class, TenantMiddleware::class], func
 
     // ── Orders ────────────────────────────────────────────
     $router->get('/orders',              [OrderController::class, 'index']);
+    $router->get('/orders/customer-profile', [OrderController::class, 'customerProfile']);
     $router->get('/orders/{id}',         [OrderController::class, 'show']);
     $router->post('/orders',             [OrderController::class, 'store'],
         [new RBACMiddleware(['owner', 'admin', 'order_confirmator'])]);

@@ -54,6 +54,13 @@ class OrderService
         return $order;
     }
 
+    public function getCustomerProfileByPhone(int $storeId, string $phone): array
+    {
+        $profile = $this->repo->getCustomerProfileByPhone($storeId, $phone);
+        $profile['is_repeat_customer'] = ($profile['order_count'] ?? 0) > 1;
+        return $profile;
+    }
+
     public function create(int $storeId, int $userId, array $data): array
     {
         $this->db->beginTransaction();

@@ -48,6 +48,12 @@ interface RiskPredictionFormProps {
   isLoading: boolean;
 }
 
+type CustomerProfile = {
+  order_count?: number;
+  total_spent?: number;
+  is_repeat_customer?: boolean;
+};
+
 const DEFAULT_VALUES: OrderRiskRequest = {
   order_date: toLocalDateTimeValue(new Date()),
   subtotal: 0,
@@ -267,11 +273,32 @@ export function RiskPredictionForm({ onSubmit, isLoading }: RiskPredictionFormPr
       }
 
       const ml = order.ml_features ?? {};
+      let customerProfile: CustomerProfile | undefined;
+      if (order.customer_phone) {
+        try {
+          const profileRes = await apiClient.get(
+            `/orders/customer-profile?phone=${encodeURIComponent(order.customer_phone)}`
+          );
+          customerProfile = profileRes.data?.data as CustomerProfile | undefined;
+        } catch {
+          customerProfile = undefined;
+        }
+      }
+
       const orderDate = order.created_at
         ? toLocalDateTimeValue(new Date(order.created_at))
         : form.order_date;
       const wilayaCode = order.wilaya_id
         ? WILAYAS.find((w) => w.id === order.wilaya_id)?.code
+        : undefined;
+      const itemCategory = Array.isArray(order.items)
+        ? order.items
+            .map((item) =>
+              typeof item.product_category === "string"
+                ? item.product_category.trim()
+                : ""
+            )
+            .find((value) => value.length > 0)
         : undefined;
       const itemCount = Array.isArray(order.items)
         ? Math.max(
@@ -297,10 +324,20 @@ export function RiskPredictionForm({ onSubmit, isLoading }: RiskPredictionFormPr
         ),
         n_items: itemCount,
         order_date: orderDate,
+        customer_order_count: Number(
+          customerProfile?.order_count ?? prev.customer_order_count ?? 0
+        ),
+        customer_total_spent: Number(
+          customerProfile?.total_spent ?? prev.customer_total_spent ?? 0
+        ),
+        is_repeat_customer:
+          typeof customerProfile?.is_repeat_customer === "boolean"
+            ? customerProfile.is_repeat_customer
+            : Number(customerProfile?.order_count ?? prev.customer_order_count ?? 0) > 1,
         product_category:
-          typeof ml.product_category === "string"
-            ? ml.product_category
-            : prev.product_category,
+          typeof ml.product_category === "string" && ml.product_category.trim().length > 0
+            ? ml.product_category.trim()
+            : itemCategory ?? prev.product_category,
         estimated_delivery_days: Number(
           ml.estimated_delivery_days ?? prev.estimated_delivery_days ?? 7
         ),
