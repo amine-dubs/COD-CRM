@@ -205,7 +205,12 @@ class DemandForecaster:
         daily.columns = ["ds", "y", "order_count"]
         return daily
 
-    def forecast(self, category: str = "all", periods: int = 30) -> dict:
+    def forecast(
+        self,
+        category: str = "all",
+        periods: int = 30,
+        start_date: Optional[str] = None,
+    ) -> dict:
         """Generate demand forecast for a category."""
         if not self._loaded:
             raise RuntimeError("Models not loaded. Call load() first.")
@@ -217,33 +222,98 @@ class DemandForecaster:
         ts = self.time_series_data[model_key]
         values = np.array(ts["values"], dtype=np.float64)
         dates = pd.to_datetime(ts["dates"])
-        last_date = dates.max()
+        last_date = dates.max().normalize()
+        (
+            all_forecast_dates,
+            warmup_days,
+            default_start,
+            target_start,
+        ) = self._resolve_forecast_dates(last_date, periods, start_date)
 
         # Use LightGBM if available, else statistical fallback
         lgbm_model = self.models.get(model_key)
         if lgbm_model is not None:
             return self._forecast_lgbm(
-                lgbm_model, values, last_date, category, periods, model_key
+                lgbm_model,
+                values,
+                category,
+                periods,
+                model_key,
+                all_forecast_dates,
+                warmup_days,
+                last_date,
+                default_start,
+                target_start,
             )
-        return self._forecast_statistical(values, last_date, category, periods)
+        return self._forecast_statistical(
+            values,
+            category,
+            periods,
+            all_forecast_dates,
+            warmup_days,
+            last_date,
+            default_start,
+            target_start,
+        )
 
     def get_available_categories(self) -> list[str]:
         """Return list of categories with available time series data."""
         return list(self.time_series_data.keys())
 
+    @staticmethod
+    def _resolve_forecast_dates(
+        last_date: pd.Timestamp,
+        periods: int,
+        start_date: Optional[str],
+    ) -> tuple[pd.DatetimeIndex, int, pd.Timestamp, pd.Timestamp]:
+        """Build forecast date window and warmup gap for optional custom start date."""
+        default_start = (last_date + pd.Timedelta(days=1)).normalize()
+        target_start = default_start
+
+        if start_date:
+            try:
+                target_start = pd.Timestamp(start_date).normalize()
+            except Exception as exc:
+                raise ValueError(
+                    "Invalid start_date format. Use YYYY-MM-DD."
+                ) from exc
+
+            if target_start < default_start:
+                raise ValueError(
+                    f"start_date must be on or after {default_start.strftime('%Y-%m-%d')}"
+                )
+
+        warmup_days = int((target_start - default_start).days)
+        total_steps = warmup_days + periods
+        all_forecast_dates = pd.date_range(
+            start=default_start,
+            periods=total_steps,
+            freq="D",
+        )
+        return all_forecast_dates, warmup_days, default_start, target_start
+
     # ── LightGBM Forecasting (recursive multi-step) ───────────
 
     def _forecast_lgbm(
-        self, model, values: np.ndarray, last_date, category: str,
-        periods: int, model_key: str,
+        self,
+        model,
+        values: np.ndarray,
+        category: str,
+        periods: int,
+        model_key: str,
+        all_forecast_dates: pd.DatetimeIndex,
+        warmup_days: int,
+        last_date: pd.Timestamp,
+        default_start: pd.Timestamp,
+        target_start: pd.Timestamp,
     ) -> dict:
         """Forecast using trained LightGBM with recursive multi-step prediction."""
         history_values = list(values)
-        predictions = []
+        all_predictions = []
 
         # Pre-compute Islamic event dates for the forecast horizon
-        start_year = int(last_date.year)
-        end_year = start_year + 2
+        start_year = int(default_start.year)
+        end_year = int(all_forecast_dates.max().year) + 1
         events = get_islamic_events(start_year, end_year)
         event_dates_by_type = {}
         for etype in EVENT_TYPES:
@@ -253,30 +323,25 @@ class DemandForecaster:
                 if e["event"] == etype
             )
 
-        future_dates = pd.date_range(
-            start=last_date + pd.Timedelta(days=1), periods=periods, freq="D"
-        )
-
-        for i in range(periods):
-            dt = future_dates[i]
+        for i, dt in enumerate(all_forecast_dates):
             row = self._build_features_for_date(
                 dt, history_values, event_dates_by_type
             )
             X_row = np.array([[row[c] for c in FEATURE_COLS]])
             pred_val = max(0, float(model.predict(X_row)[0]))
-            predictions.append(pred_val)
+            all_predictions.append(pred_val)
             history_values.append(pred_val)
 
         # Confidence intervals from training residual std
         std = self.residual_std.get(model_key, np.std(values[-30:]) * 0.3)
-        pred_arr = np.array(predictions)
+        pred_arr = np.array(all_predictions)
 
         results = []
-        for i in range(periods):
+        for i in range(warmup_days, len(all_forecast_dates)):
             # Wider CI as horizon grows (uncertainty accumulates)
             ci_factor = 1.28 * (1 + i * 0.02)  # ~80% CI, growing with horizon
             results.append({
-                "ds": future_dates[i].strftime("%Y-%m-%d"),
+                "ds": all_forecast_dates[i].strftime("%Y-%m-%d"),
                 "yhat": round(float(pred_arr[i]), 2),
                 "yhat_lower": round(max(0, float(pred_arr[i] - std * ci_factor)), 2),
                 "yhat_upper": round(float(pred_arr[i] + std * ci_factor), 2),
@@ -298,8 +363,8 @@ class DemandForecaster:
         event_annotations = []
         seen_annotation_keys = set()
         prev_ramadan = False
-        for i in range(periods):
-            dt = future_dates[i]
+        returned_dates = all_forecast_dates[warmup_days:]
+        for dt in returned_dates:
             dt_norm = dt.normalize()
             date_str = dt.strftime("%Y-%m-%d")
 
@@ -331,6 +396,9 @@ class DemandForecaster:
         return {
             "category": category,
             "periods": periods,
+            "history_last_date": last_date.strftime("%Y-%m-%d"),
+            "default_start_date": default_start.strftime("%Y-%m-%d"),
+            "start_date": target_start.strftime("%Y-%m-%d"),
             "method": "lightgbm",
             "predictions": results,
             "event_annotations": event_annotations,
@@ -391,7 +459,15 @@ class DemandForecaster:
     # ── Statistical Fallback ──────────────────────────────────
 
     def _forecast_statistical(
-        self, values: np.ndarray, last_date, category: str, periods: int
+        self,
+        values: np.ndarray,
+        category: str,
+        periods: int,
+        all_forecast_dates: pd.DatetimeIndex,
+        warmup_days: int,
+        last_date: pd.Timestamp,
+        default_start: pd.Timestamp,
+        target_start: pd.Timestamp,
     ) -> dict:
         """Simple moving-average forecast when LightGBM model not available."""
         if len(values) < 7:
@@ -400,11 +476,10 @@ class DemandForecaster:
         ma7 = float(values[-7:].mean())
         ma30 = float(values[-30:].mean()) if len(values) >= 30 else ma7
 
-        predictions = []
-        for i in range(1, periods + 1):
-            date = last_date + pd.Timedelta(days=i)
+        all_predictions = []
+        for date in all_forecast_dates:
             predicted = ma7 * 0.6 + ma30 * 0.4
-            predictions.append({
+            all_predictions.append({
                 "ds": date.strftime("%Y-%m-%d"),
                 "yhat": round(max(0, predicted), 2),
                 "yhat_lower": round(max(0, predicted * 0.7), 2),
@@ -414,6 +489,9 @@ class DemandForecaster:
         return {
             "category": category,
             "periods": periods,
+            "history_last_date": last_date.strftime("%Y-%m-%d"),
+            "default_start_date": default_start.strftime("%Y-%m-%d"),
+            "start_date": target_start.strftime("%Y-%m-%d"),
             "method": "moving_average",
-            "predictions": predictions,
+            "predictions": all_predictions[warmup_days:],
         }

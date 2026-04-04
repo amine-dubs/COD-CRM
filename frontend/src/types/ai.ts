@@ -97,6 +97,9 @@ export interface EventAnnotation {
 export interface ForecastResult {
   category: string;
   periods: number;
+  history_last_date?: string;
+  default_start_date?: string;
+  start_date?: string;
   predictions: ForecastPrediction[];
   event_annotations?: EventAnnotation[];
 }
@@ -118,8 +121,10 @@ export interface ConfusionMatrix {
 }
 
 export interface RiskMetrics {
+  threshold_strategy?: string;
   models: Record<string, ModelMetric>;
   optimal_threshold: number;
+  model_thresholds?: Record<string, number>;
   ensemble_weights: Record<string, number>;
   confusion_matrix_default: ConfusionMatrix & { threshold: number };
   confusion_matrix_optimal: ConfusionMatrix & { threshold: number };

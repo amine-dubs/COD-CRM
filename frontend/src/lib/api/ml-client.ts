@@ -74,10 +74,18 @@ export const mlApi = {
   getModelInfo: () =>
     fetchMl<AiApiResponse<ModelInfo>>("/api/predict/model-info"),
 
-  getForecast: (category: string, periods: number) =>
-    fetchMl<AiApiResponse<ForecastResult>>(
-      `/api/forecast/demand?category=${category}&periods=${periods}`
-    ),
+  getForecast: (category: string, periods: number, startDate?: string) => {
+    const params = new URLSearchParams({
+      category,
+      periods: String(periods),
+    });
+    if (startDate) {
+      params.set("start_date", startDate);
+    }
+    return fetchMl<AiApiResponse<ForecastResult>>(
+      `/api/forecast/demand?${params.toString()}`
+    );
+  },
 
   getForecastCategories: () =>
     fetchMl<AiApiResponse<{ categories: string[] }>>("/api/forecast/categories"),

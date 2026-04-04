@@ -389,22 +389,31 @@ def train_risk_ensemble(df: pd.DataFrame, auto_tune: bool = True):
     logger.info(f"  Weights: CatBoost={weights['catboost']:.3f}, LightGBM={weights['lightgbm']:.3f}, XGBoost={weights['xgboost']:.3f}")
     logger.info(f"{'='*40}")
 
-    # ── Optimal threshold via Youden's J statistic ──
-    fpr, tpr, thresholds_roc = roc_curve(y_test, ensemble_proba)
-    youden_j = tpr - fpr
-    optimal_idx = np.argmax(youden_j)
-    optimal_threshold = float(thresholds_roc[optimal_idx])
+    def _find_youden_threshold(proba, y_true):
+        fpr_arr, tpr_arr, thr_arr = roc_curve(y_true, proba)
+        j_arr = tpr_arr - fpr_arr
+        idx = int(np.argmax(j_arr))
+        return {
+            "threshold": float(thr_arr[idx]),
+            "tpr": float(tpr_arr[idx]),
+            "fpr": float(fpr_arr[idx]),
+            "j": float(j_arr[idx]),
+        }
 
-    # ── Also find the threshold that maximizes F1 ──
-    from sklearn.metrics import precision_recall_curve
-    prec_arr, rec_arr, thr_pr = precision_recall_curve(y_test, ensemble_proba)
-    f1_arr = 2 * prec_arr * rec_arr / (prec_arr + rec_arr + 1e-8)
-    best_f1_idx = np.argmax(f1_arr)
-    f1_threshold = float(thr_pr[best_f1_idx]) if best_f1_idx < len(thr_pr) else 0.5
+    youden_thresholds = {
+        "catboost": _find_youden_threshold(cb_proba, y_test),
+        "lightgbm": _find_youden_threshold(lgb_proba, y_test),
+        "xgboost": _find_youden_threshold(xgb_proba, y_test),
+        "ensemble": _find_youden_threshold(ensemble_proba, y_test),
+    }
+    optimal_threshold = youden_thresholds["ensemble"]["threshold"]
 
-    logger.info(f"\n  Threshold optimization:")
-    logger.info(f"  Youden's J threshold: {optimal_threshold:.4f} (TPR={tpr[optimal_idx]:.3f}, FPR={fpr[optimal_idx]:.3f})")
-    logger.info(f"  Max-F1 threshold:     {f1_threshold:.4f} (F1={f1_arr[best_f1_idx]:.4f})")
+    logger.info(f"\n  Threshold optimization (Youden's J):")
+    for model_name, info in youden_thresholds.items():
+        logger.info(
+            f"  {model_name:9s}: threshold={info['threshold']:.4f} "
+            f"(TPR={info['tpr']:.3f}, FPR={info['fpr']:.3f}, J={info['j']:.3f})"
+        )
 
     # ── Per-class metrics at default threshold (0.5) ──
     ensemble_pred_05 = (ensemble_proba >= 0.5).astype(int)
@@ -447,21 +456,12 @@ def train_risk_ensemble(df: pd.DataFrame, auto_tune: bool = True):
             "delivered": {"precision": round(del_precision, 4), "recall": round(del_recall, 4), "f1": round(del_f1, 4)},
         }
 
-    # Find each model's own F1-maximizing threshold (avoids the CatBoost F1=0 bug
-    # where using the ensemble's threshold on a differently-calibrated model gives
-    # misleading metrics). Individual models are reported at their own best threshold.
-    def _find_f1_threshold(proba, y_true):
-        from sklearn.metrics import precision_recall_curve as _prc
-        p, r, t = _prc(y_true, proba)
-        f1 = 2 * p * r / (p + r + 1e-8)
-        idx = np.argmax(f1)
-        return float(t[idx]) if idx < len(t) else 0.5
-
-    cb_threshold = _find_f1_threshold(cb_proba, y_test)
-    lgb_threshold = _find_f1_threshold(lgb_proba, y_test)
-    xgb_threshold = _find_f1_threshold(xgb_proba, y_test)
+    cb_threshold = youden_thresholds["catboost"]["threshold"]
+    lgb_threshold = youden_thresholds["lightgbm"]["threshold"]
+    xgb_threshold = youden_thresholds["xgboost"]["threshold"]
 
     risk_metrics = {
+        "threshold_strategy": "youden_j",
         "models": {
             "catboost": _model_metrics("catboost", cb_proba, y_test, cb_threshold),
             "lightgbm": _model_metrics("lightgbm", lgb_proba, y_test, lgb_threshold),
@@ -469,6 +469,7 @@ def train_risk_ensemble(df: pd.DataFrame, auto_tune: bool = True):
             "ensemble": _model_metrics("ensemble", ensemble_proba, y_test, optimal_threshold),
         },
         "optimal_threshold": optimal_threshold,
+        "model_thresholds": {k: v["threshold"] for k, v in youden_thresholds.items()},
         "ensemble_weights": {k: float(v) for k, v in weights.items()},
         "confusion_matrix_default": {
             "threshold": 0.5,

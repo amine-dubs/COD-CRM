@@ -112,14 +112,23 @@ class MLService:
 
     # ── Demand Forecasting ───────────────────────────────────
 
-    def forecast_demand(self, category: str = "all", periods: int = 30) -> dict:
+    def forecast_demand(
+        self,
+        category: str = "all",
+        periods: int = 30,
+        start_date: Optional[str] = None,
+    ) -> dict:
         """Generate demand forecast."""
         if not self.forecaster._loaded:
             raise RuntimeError(
                 "Forecasting models are not loaded. "
                 "Train models first using train_all.py or the retrain endpoint."
             )
-        return self.forecaster.forecast(category=category, periods=periods)
+        return self.forecaster.forecast(
+            category=category,
+            periods=periods,
+            start_date=start_date,
+        )
 
     def get_forecast_categories(self) -> list[str]:
         """List categories with available forecasting models."""

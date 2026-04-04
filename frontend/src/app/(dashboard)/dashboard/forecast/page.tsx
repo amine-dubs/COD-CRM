@@ -10,11 +10,20 @@ import { mlApi } from "@/lib/api/ml-client";
 import { useI18n } from "@/providers/i18n-provider";
 import type { ForecastResult } from "@/types/ai";
 
+const getTodayInputDate = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export default function ForecastPage() {
   const { t } = useI18n();
   const [categories, setCategories] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [periods, setPeriods] = useState(30);
+  const [startDate, setStartDate] = useState(getTodayInputDate);
   const [forecast, setForecast] = useState<ForecastResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,11 +39,18 @@ export default function ForecastPage() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    const minStart = forecast?.default_start_date;
+    if (minStart && startDate < minStart) {
+      setStartDate(minStart);
+    }
+  }, [forecast?.default_start_date, startDate]);
+
   const handleFetch = async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await mlApi.getForecast(selectedCategory, periods);
+      const res = await mlApi.getForecast(selectedCategory, periods, startDate);
       setForecast(res.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("ai.forecast_failed"));
@@ -53,6 +69,15 @@ export default function ForecastPage() {
       }
     : null;
 
+  const forecastWindowInfo =
+    forecast?.history_last_date && forecast?.default_start_date && forecast?.start_date
+      ? t("ai.forecast_window_info", {
+          history: forecast.history_last_date,
+          default: forecast.default_start_date,
+          start: forecast.start_date,
+        })
+      : null;
+
   return (
     <div className="space-y-6">
       <div>
@@ -60,6 +85,9 @@ export default function ForecastPage() {
         <p className="text-sm text-muted-foreground">
           {t("ai.forecast_subtitle")}
         </p>
+        {forecastWindowInfo ? (
+          <p className="text-xs text-muted-foreground mt-1">{forecastWindowInfo}</p>
+        ) : null}
       </div>
 
       {error && <AiAlert variant="error">{error}</AiAlert>}
@@ -72,6 +100,9 @@ export default function ForecastPage() {
             onCategoryChange={setSelectedCategory}
             periods={periods}
             onPeriodsChange={setPeriods}
+            startDate={startDate}
+            minStartDate={forecast?.default_start_date}
+            onStartDateChange={setStartDate}
             onFetch={handleFetch}
             isLoading={loading}
           />

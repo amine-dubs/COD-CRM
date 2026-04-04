@@ -10,6 +10,9 @@ interface ForecastControlsProps {
   onCategoryChange: (cat: string) => void;
   periods: number;
   onPeriodsChange: (p: number) => void;
+  startDate: string;
+  minStartDate?: string;
+  onStartDateChange: (d: string) => void;
   onFetch: () => void;
   isLoading: boolean;
 }
@@ -20,6 +23,9 @@ export function ForecastControls({
   onCategoryChange,
   periods,
   onPeriodsChange,
+  startDate,
+  minStartDate,
+  onStartDateChange,
   onFetch,
   isLoading,
 }: ForecastControlsProps) {
@@ -42,6 +48,20 @@ export function ForecastControls({
               </option>
             ))}
           </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-foreground">
+            {t("ai.forecast_start_date")}
+          </label>
+          <input
+            type="date"
+            value={startDate}
+            min={minStartDate}
+            onChange={(e) => onStartDateChange(e.target.value)}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          />
+          <p className="text-xs text-muted-foreground">{t("ai.forecast_start_date_hint")}</p>
         </div>
 
         <div className="space-y-1.5">
