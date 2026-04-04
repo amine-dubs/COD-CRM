@@ -21,14 +21,60 @@ const toLocalDateTimeValue = (date: Date): string => {
 
 const DEFAULT_ORDER_TIME = "12:00";
 
-const parseOrderDateParts = (value?: string): { date: string; time: string } => {
+const ORDER_DATE_REGEX = /^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}:\d{2}))?/;
+
+const normalizeOrderDateValue = (value?: string): string | undefined => {
   if (!value) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  const matched = trimmed.match(ORDER_DATE_REGEX);
+  if (matched) {
+    const [, datePart, timePart] = matched;
+    return `${datePart}T${timePart ?? DEFAULT_ORDER_TIME}`;
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return undefined;
+  }
+
+  return toLocalDateTimeValue(parsed);
+};
+
+const snapTimeToHalfHour = (time: string): string => {
+  const matched = time.match(/^(\d{2}):(\d{2})$/);
+  if (!matched) {
+    return DEFAULT_ORDER_TIME;
+  }
+
+  const hour = Number(matched[1]);
+  const minute = Number(matched[2]);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return DEFAULT_ORDER_TIME;
+  }
+
+  const snappedMinute = minute >= 30 ? 30 : 0;
+  return `${String(hour).padStart(2, "0")}:${String(snappedMinute).padStart(2, "0")}`;
+};
+
+const parseOrderDateParts = (value?: string): { date: string; time: string } => {
+  const normalizedValue = normalizeOrderDateValue(value);
+
+  if (!normalizedValue) {
     return { date: "", time: DEFAULT_ORDER_TIME };
   }
 
-  const [datePart = "", rawTime = ""] = value.split("T");
+  const [datePart = "", rawTime = ""] = normalizedValue.split("T");
   const timePart = rawTime.slice(0, 5);
-  const validTime = /^\d{2}:\d{2}$/.test(timePart) ? timePart : DEFAULT_ORDER_TIME;
+  const validTime = /^\d{2}:\d{2}$/.test(timePart)
+    ? snapTimeToHalfHour(timePart)
+    : DEFAULT_ORDER_TIME;
 
   return {
     date: datePart,
@@ -285,9 +331,7 @@ export function RiskPredictionForm({ onSubmit, isLoading }: RiskPredictionFormPr
         }
       }
 
-      const orderDate = order.created_at
-        ? toLocalDateTimeValue(new Date(order.created_at))
-        : form.order_date;
+      const orderDate = normalizeOrderDateValue(order.created_at) ?? form.order_date;
       const wilayaCode = order.wilaya_id
         ? WILAYAS.find((w) => w.id === order.wilaya_id)?.code
         : undefined;
