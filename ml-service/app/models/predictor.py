@@ -21,6 +21,7 @@ class OrderRiskPredictor:
         self.weights = {}
         self.feature_engineer: Optional[FeatureEngineer] = None
         self.optimal_threshold: float = 0.5
+        self.auto_approve_threshold: float = 0.5
         self._loaded = False
 
     def load(self, model_path: Optional[Path] = None) -> bool:
@@ -34,9 +35,13 @@ class OrderRiskPredictor:
             self.models = data["models"]
             self.weights = data["weights"]
             self.optimal_threshold = data.get("optimal_threshold", 0.5)
+            self.auto_approve_threshold = data.get(
+                "operational_threshold", self.optimal_threshold
+            )
         elif (model_dir / "risk_model.joblib").exists():
             self.models = {"single": joblib.load(model_dir / "risk_model.joblib")}
             self.weights = {"single": 1.0}
+            self.auto_approve_threshold = 0.5
         else:
             return False
 
@@ -73,13 +78,17 @@ class OrderRiskPredictor:
         score = round(ensemble_prob * 100, 1)
 
         category = self._get_category(score)
+        workflow_action, workflow_reason = self._get_workflow_action(ensemble_prob)
         reasons = self._get_risk_reasons(features, score, order_data)
-        recommendation = self._get_recommendation(category)
+        recommendation = self._get_recommendation(category, workflow_action)
 
         return {
             "score": score,
             "category": category,
             "success_probability": round(ensemble_prob, 4),
+            "workflow_action": workflow_action,
+            "workflow_reason": workflow_reason,
+            "auto_approve_threshold": round(self.auto_approve_threshold, 4),
             "reasons": reasons,
             "recommendation": recommendation,
             "model_scores": model_scores,
@@ -99,6 +108,18 @@ class OrderRiskPredictor:
             return "medium"
         else:
             return "low"
+
+    def _get_workflow_action(self, success_probability: float) -> tuple[str, str]:
+        """Return production workflow decision for COD operations."""
+        if success_probability >= self.auto_approve_threshold:
+            return (
+                "auto_approve",
+                "High confidence delivery success. Auto-approve and dispatch.",
+            )
+        return (
+            "manual_review",
+            "Requires manual confirmation to reduce failed COD deliveries.",
+        )
 
     def _get_risk_reasons(self, features: dict, score: float, order_data: Optional[dict] = None) -> list[str]:
         def _has_value(v) -> bool:
@@ -140,11 +161,16 @@ class OrderRiskPredictor:
             reasons.append("Long estimated delivery time")
         return reasons
 
-    def _get_recommendation(self, category: str) -> str:
+    def _get_recommendation(self, category: str, workflow_action: str) -> str:
+        if workflow_action == "auto_approve":
+            return (
+                "Auto-approve this order. Keep standard dispatch and customer updates."
+            )
+
         recommendations = {
-            "critical": "URGENT: Verify customer by phone before processing. Confirm shipping address and customer availability.",
-            "high": "Priority confirmation call recommended. Verify shipping address and customer availability.",
-            "medium": "Standard processing. Monitor delivery status closely.",
-            "low": "Low risk order. Proceed with standard workflow.",
+            "critical": "Manual review (urgent): call customer, confirm wilaya/commune/address, then ship only after confirmation.",
+            "high": "Manual review required: confirmation call and address verification before shipping.",
+            "medium": "Manual review recommended: quick phone confirmation before dispatch.",
+            "low": "Manual review light: verify phone availability before shipping.",
         }
         return recommendations.get(category, "Standard processing.")

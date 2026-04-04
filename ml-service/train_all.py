@@ -408,12 +408,86 @@ def train_risk_ensemble(df: pd.DataFrame, auto_tune: bool = True):
     }
     optimal_threshold = youden_thresholds["ensemble"]["threshold"]
 
+    def _find_auto_approve_threshold(
+        proba,
+        y_true,
+        target_precision=0.93,
+        min_approve_rate=0.20,
+    ):
+        """Pick an auto-approve threshold focused on reducing failed COD deliveries.
+
+        Strategy:
+          1) Find thresholds that satisfy target delivered precision and minimum
+             auto-approval coverage.
+          2) Among valid thresholds, keep the one with highest auto-approve rate.
+          3) If none satisfy targets, fall back to max precision threshold.
+        """
+        candidates = np.unique(np.clip(proba, 0, 1))
+        if len(candidates) == 0:
+            candidates = np.array([0.5])
+
+        best_valid = None
+        best_precision = None
+        for thr in candidates:
+            pred = (proba >= thr).astype(int)
+            cm = confusion_matrix(y_true, pred, labels=[0, 1])
+            tn, fp, fn, tp = cm.ravel()
+            approve_count = tp + fp
+            approve_rate = float(approve_count / len(y_true)) if len(y_true) else 0.0
+            delivered_precision = float(tp / approve_count) if approve_count > 0 else 0.0
+            stats = {
+                "threshold": float(thr),
+                "tn": int(tn),
+                "fp": int(fp),
+                "fn": int(fn),
+                "tp": int(tp),
+                "approve_rate": approve_rate,
+                "failure_escape_rate": float(fp / (fp + tn)) if (fp + tn) > 0 else 0.0,
+                "delivered_precision": delivered_precision,
+                "delivered_recall": float(tp / (tp + fn)) if (tp + fn) > 0 else 0.0,
+            }
+
+            if best_precision is None or delivered_precision > best_precision["delivered_precision"] or (
+                delivered_precision == best_precision["delivered_precision"] and approve_rate > best_precision["approve_rate"]
+            ):
+                best_precision = stats
+
+            if delivered_precision >= target_precision and approve_rate >= min_approve_rate:
+                if best_valid is None or approve_rate > best_valid["approve_rate"] or (
+                    approve_rate == best_valid["approve_rate"] and thr < best_valid["threshold"]
+                ):
+                    best_valid = stats
+
+        selected = best_valid or best_precision
+        selected["selection_mode"] = "target_precision" if best_valid is not None else "max_precision_fallback"
+        selected["target_precision"] = float(target_precision)
+        selected["min_approve_rate"] = float(min_approve_rate)
+        return selected
+
+    target_precision = 0.93
+    min_approve_rate = 0.20
+    operational_policy = _find_auto_approve_threshold(
+        ensemble_proba,
+        y_test,
+        target_precision=target_precision,
+        min_approve_rate=min_approve_rate,
+    )
+
     logger.info(f"\n  Threshold optimization (Youden's J):")
     for model_name, info in youden_thresholds.items():
         logger.info(
             f"  {model_name:9s}: threshold={info['threshold']:.4f} "
             f"(TPR={info['tpr']:.3f}, FPR={info['fpr']:.3f}, J={info['j']:.3f})"
         )
+    logger.info(
+        "  Operational COD threshold: %.4f (mode=%s, precision=%.1f%%, "
+        "approve_rate=%.1f%%, failure_escape=%.1f%%)",
+        operational_policy["threshold"],
+        operational_policy["selection_mode"],
+        operational_policy["delivered_precision"] * 100,
+        operational_policy["approve_rate"] * 100,
+        operational_policy["failure_escape_rate"] * 100,
+    )
 
     # ── Per-class metrics at default threshold (0.5) ──
     ensemble_pred_05 = (ensemble_proba >= 0.5).astype(int)
@@ -462,6 +536,18 @@ def train_risk_ensemble(df: pd.DataFrame, auto_tune: bool = True):
 
     risk_metrics = {
         "threshold_strategy": "youden_j",
+        "operational_policy": {
+            "objective": "minimize_failed_deliveries_cod",
+            "action_policy": "auto_approve_vs_manual_review",
+            "selection_mode": operational_policy["selection_mode"],
+            "target_delivered_precision": operational_policy["target_precision"],
+            "min_auto_approve_rate": operational_policy["min_approve_rate"],
+            "auto_approve_threshold": operational_policy["threshold"],
+            "estimated_auto_approve_rate": operational_policy["approve_rate"],
+            "estimated_failure_escape_rate": operational_policy["failure_escape_rate"],
+            "estimated_delivered_precision": operational_policy["delivered_precision"],
+            "estimated_delivered_recall": operational_policy["delivered_recall"],
+        },
         "models": {
             "catboost": _model_metrics("catboost", cb_proba, y_test, cb_threshold),
             "lightgbm": _model_metrics("lightgbm", lgb_proba, y_test, lgb_threshold),
@@ -509,6 +595,7 @@ def train_risk_ensemble(df: pd.DataFrame, auto_tune: bool = True):
         "models": {"catboost": cb_model, "lightgbm": lgb_model, "xgboost": xgb_model},
         "weights": weights,
         "optimal_threshold": optimal_threshold,
+        "operational_threshold": operational_policy["threshold"],
     }, MODEL_DIR / "risk_ensemble.joblib")
     joblib.dump(fe, MODEL_DIR / "feature_engineer.joblib")
 

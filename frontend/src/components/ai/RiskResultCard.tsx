@@ -8,6 +8,14 @@ import { RISK_COLORS } from "@/lib/utils/ai";
 import type { RiskPredictionResult } from "@/types/ai";
 
 export function RiskResultCard({ result }: { result: RiskPredictionResult }) {
+  const workflowAction = result.workflow_action;
+  const workflowBadgeLabel =
+    workflowAction === "auto_approve"
+      ? "AUTO APPROVE"
+      : workflowAction === "manual_review"
+        ? "MANUAL REVIEW"
+        : null;
+
   return (
     <div className="space-y-4">
       <AiCard>
@@ -19,9 +27,19 @@ export function RiskResultCard({ result }: { result: RiskPredictionResult }) {
           <Badge variant="outline">
             {result.category.toUpperCase()} RISK
           </Badge>
+          {workflowBadgeLabel ? (
+            <Badge variant={workflowAction === "auto_approve" ? "default" : "secondary"}>
+              {workflowBadgeLabel}
+            </Badge>
+          ) : null}
           <p className="text-sm text-center text-muted-foreground max-w-md">
             {result.recommendation}
           </p>
+          {result.workflow_reason ? (
+            <p className="text-xs text-center text-muted-foreground max-w-md">
+              {result.workflow_reason}
+            </p>
+          ) : null}
         </div>
       </AiCard>
 

@@ -83,5 +83,6 @@ def model_info():
             "features": ml_service.predictor.feature_engineer.get_feature_names() if ml_service.predictor._loaded else [],
             "n_features": len(ml_service.predictor.feature_engineer.get_feature_names()) if ml_service.predictor._loaded else 0,
             "optimal_threshold": ml_service.predictor.optimal_threshold if ml_service.predictor._loaded else 0.5,
+            "auto_approve_threshold": ml_service.predictor.auto_approve_threshold if ml_service.predictor._loaded else 0.5,
         },
     }

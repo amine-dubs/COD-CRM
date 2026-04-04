@@ -1,11 +1,23 @@
 {
-  "trained_at": "2026-04-04T18:56:38.086563",
+  "trained_at": "2026-04-04T19:17:25.634243",
   "dataset": "crm_database",
   "source_file": "MySQL cod_crm.orders",
   "total_orders": 6042,
   "delivery_rate": 0.8274,
   "risk_prediction": {
     "threshold_strategy": "youden_j",
+    "operational_policy": {
+      "objective": "minimize_failed_deliveries_cod",
+      "action_policy": "auto_approve_vs_manual_review",
+      "selection_mode": "target_precision",
+      "target_delivered_precision": 0.93,
+      "min_auto_approve_rate": 0.2,
+      "auto_approve_threshold": 0.9377016419253213,
+      "estimated_auto_approve_rate": 0.313953488372093,
+      "estimated_failure_escape_rate": 0.12745098039215685,
+      "estimated_delivered_precision": 0.9312169312169312,
+      "estimated_delivered_recall": 0.352
+    },
     "models": {
       "catboost": {
         "auc_roc": 0.7118725490196078,

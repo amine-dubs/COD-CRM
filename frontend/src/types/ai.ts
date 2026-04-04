@@ -52,6 +52,9 @@ export interface RiskPredictionResult {
   score: number;
   category: RiskCategory;
   success_probability: number;
+  workflow_action?: "auto_approve" | "manual_review";
+  workflow_reason?: string;
+  auto_approve_threshold?: number;
   reasons: string[];
   recommendation: string;
   model_scores: Record<string, number>;
@@ -62,6 +65,7 @@ export interface ModelInfo {
   features: string[];
   n_features: number;
   optimal_threshold: number;
+  auto_approve_threshold?: number;
 }
 
 // === Segmentation ===
@@ -122,6 +126,18 @@ export interface ConfusionMatrix {
 
 export interface RiskMetrics {
   threshold_strategy?: string;
+  operational_policy?: {
+    objective: string;
+    action_policy: string;
+    selection_mode: string;
+    target_delivered_precision: number;
+    min_auto_approve_rate: number;
+    auto_approve_threshold: number;
+    estimated_auto_approve_rate: number;
+    estimated_failure_escape_rate: number;
+    estimated_delivered_precision: number;
+    estimated_delivered_recall: number;
+  };
   models: Record<string, ModelMetric>;
   optimal_threshold: number;
   model_thresholds?: Record<string, number>;
