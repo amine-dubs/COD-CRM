@@ -85,4 +85,9 @@ class DeliveryRepository
     {
         return $this->db->update('deliveries', $data, 'id = ? AND store_id = ?', [$id, $storeId]);
     }
+
+    public function delete(int $id, int $storeId): bool
+    {
+        return $this->db->delete('deliveries', 'id = ? AND store_id = ?', [$id, $storeId]) > 0;
+    }
 }

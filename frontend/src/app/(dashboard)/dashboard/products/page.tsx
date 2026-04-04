@@ -159,6 +159,7 @@ export default function ProductsPage() {
 
   // ── Sorting & Filtering ───────────────────────────
   const categories = Array.from(new Set(products.map((p) => p.category).filter(Boolean))) as string[];
+  const categorySuggestions = [...categories].sort((a, b) => a.localeCompare(b));
 
   const handleSort = (key: string) => {
     if (sortKey === key) {
@@ -320,12 +321,33 @@ export default function ProductsPage() {
           <Input label={t("products.name") + " *"} name="name" value={productForm.name} onChange={handleFormChange} error={formErrors.name} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label={t("products.price_da") + " *"} name="price" type="number" value={productForm.price} onChange={handleFormChange} error={formErrors.price} />
-            <Input label={t("products.cost_price_da")} name="cost_price" type="number" value={productForm.cost_price} onChange={handleFormChange} />
+            <Input
+              label={t("products.cost_price_da")}
+              name="cost_price"
+              type="number"
+              value={productForm.cost_price}
+              onChange={handleFormChange}
+              hint={t("products.cost_price_hint")}
+            />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label={t("products.sku")} name="sku" value={productForm.sku} onChange={handleFormChange} />
-            <Input label={t("products.category")} name="category" value={productForm.category} onChange={handleFormChange} />
+            <Input
+              label={t("products.category")}
+              name="category"
+              value={productForm.category}
+              onChange={handleFormChange}
+              list="product-category-suggestions"
+              hint={t("products.category_hint")}
+            />
           </div>
+          {categorySuggestions.length > 0 && (
+            <datalist id="product-category-suggestions">
+              {categorySuggestions.map((category) => (
+                <option key={category} value={category} />
+              ))}
+            </datalist>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label={t("products.weight_kg")} name="weight" type="number" value={productForm.weight} onChange={handleFormChange} />
             <Input label={t("products.image_url")} name="image_url" value={productForm.image_url} onChange={handleFormChange} />

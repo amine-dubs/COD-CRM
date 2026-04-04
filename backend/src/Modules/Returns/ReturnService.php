@@ -30,7 +30,7 @@ class ReturnService
     public function create(int $storeId, int $userId, array $data): array
     {
         // Validate that the order belongs to this store
-        $order = $this->db->fetchOne(
+        $order = $this->db->queryOne(
             "SELECT id FROM orders WHERE id = :id AND store_id = :store_id",
             ['id' => (int)$data['order_id'], 'store_id' => $storeId]
         );
@@ -52,6 +52,36 @@ class ReturnService
         return $this->repo->findById($id, $storeId);
     }
 
+    public function update(int $id, int $storeId, array $data): ?array
+    {
+        $return = $this->repo->findById($id, $storeId);
+        if (!$return) {
+            return null;
+        }
+
+        $allowed = ['reason', 'notes'];
+        $filtered = array_intersect_key($data, array_flip($allowed));
+
+        if (array_key_exists('reason', $filtered)) {
+            $reason = trim((string)$filtered['reason']);
+            $filtered['reason'] = $reason !== '' ? $reason : $return['reason'];
+        }
+
+        if (array_key_exists('notes', $filtered)) {
+            $notes = trim((string)$filtered['notes']);
+            $filtered['notes'] = $notes !== '' ? $notes : null;
+        }
+
+        if (empty($filtered)) {
+            return $return;
+        }
+
+        $filtered['updated_at'] = date('Y-m-d H:i:s');
+        $this->repo->update($id, $storeId, $filtered);
+
+        return $this->repo->findById($id, $storeId);
+    }
+
     public function updateStatus(int $id, int $storeId, string $status, int $userId): ?array
     {
         $return = $this->repo->findById($id, $storeId);
@@ -65,5 +95,10 @@ class ReturnService
         ]);
 
         return $this->repo->findById($id, $storeId);
+    }
+
+    public function delete(int $id, int $storeId): bool
+    {
+        return $this->repo->delete($id, $storeId);
     }
 }

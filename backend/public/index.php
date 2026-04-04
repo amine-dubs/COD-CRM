@@ -56,7 +56,16 @@ try {
     $response = $router->dispatch($request);
     $response->send();
 } catch (\Throwable $e) {
-    $statusCode = $e->getCode() >= 400 && $e->getCode() < 600 ? $e->getCode() : 500;
+    // Some DB drivers throw SQLSTATE string codes (e.g. "42S22").
+    // Normalize to a valid HTTP status code to avoid secondary fatal errors.
+    $statusCode = 500;
+    $rawCode = $e->getCode();
+    if (is_int($rawCode) || (is_string($rawCode) && ctype_digit($rawCode))) {
+        $httpCode = (int)$rawCode;
+        if ($httpCode >= 400 && $httpCode < 600) {
+            $statusCode = $httpCode;
+        }
+    }
 
     $body = [
         'success' => false,
@@ -65,6 +74,7 @@ try {
 
     if ($_ENV['APP_DEBUG'] === 'true') {
         $body['trace'] = $e->getTraceAsString();
+        $body['error_code'] = $rawCode;
     }
 
     Response::json($body, $statusCode)->send();

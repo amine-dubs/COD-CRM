@@ -67,4 +67,9 @@ class ReturnRepository
     {
         return $this->db->update('returns', $data, 'id = ? AND store_id = ?', [$id, $storeId]);
     }
+
+    public function delete(int $id, int $storeId): bool
+    {
+        return $this->db->delete('returns', 'id = ? AND store_id = ?', [$id, $storeId]) > 0;
+    }
 }

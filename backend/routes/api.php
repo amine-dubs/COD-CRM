@@ -108,7 +108,11 @@ $router->group('/api/v1', [AuthMiddleware::class, TenantMiddleware::class], func
     $router->get('/deliveries/{id}',         [DeliveryController::class, 'show']);
     $router->post('/deliveries',             [DeliveryController::class, 'store'],
         [new RBACMiddleware(['owner', 'admin', 'delivery_manager'])]);
+    $router->put('/deliveries/{id}',         [DeliveryController::class, 'update'],
+        [new RBACMiddleware(['owner', 'admin', 'delivery_manager'])]);
     $router->patch('/deliveries/{id}/status', [DeliveryController::class, 'updateStatus'],
+        [new RBACMiddleware(['owner', 'admin', 'delivery_manager'])]);
+    $router->delete('/deliveries/{id}',      [DeliveryController::class, 'destroy'],
         [new RBACMiddleware(['owner', 'admin', 'delivery_manager'])]);
 
     // ── Returns ───────────────────────────────────────────
@@ -116,7 +120,11 @@ $router->group('/api/v1', [AuthMiddleware::class, TenantMiddleware::class], func
     $router->get('/returns/{id}',         [ReturnController::class, 'show']);
     $router->post('/returns',             [ReturnController::class, 'store'],
         [new RBACMiddleware(['owner', 'admin', 'delivery_manager'])]);
+    $router->put('/returns/{id}',         [ReturnController::class, 'update'],
+        [new RBACMiddleware(['owner', 'admin', 'delivery_manager'])]);
     $router->patch('/returns/{id}/status', [ReturnController::class, 'updateStatus'],
+        [new RBACMiddleware(['owner', 'admin', 'delivery_manager'])]);
+    $router->delete('/returns/{id}',      [ReturnController::class, 'destroy'],
         [new RBACMiddleware(['owner', 'admin', 'delivery_manager'])]);
 
     // ── Analytics (read-only for accountant) ──────────────

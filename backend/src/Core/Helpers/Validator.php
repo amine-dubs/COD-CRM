@@ -28,7 +28,23 @@ class Validator
 
     public function required(string $field, string $message = null): self
     {
-        if (!isset($this->data[$field]) || trim((string)$this->data[$field]) === '') {
+        if (!array_key_exists($field, $this->data)) {
+            $this->errors[$field][] = $message ?? "The {$field} field is required.";
+            return $this;
+        }
+
+        $value = $this->data[$field];
+        $isEmpty = false;
+
+        if ($value === null) {
+            $isEmpty = true;
+        } elseif (is_string($value)) {
+            $isEmpty = trim($value) === '';
+        } elseif (is_array($value)) {
+            $isEmpty = empty($value);
+        }
+
+        if ($isEmpty) {
             $this->errors[$field][] = $message ?? "The {$field} field is required.";
         }
         return $this;

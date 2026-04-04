@@ -61,6 +61,32 @@ class ReturnController
         return Response::created($return, 'Return recorded successfully');
     }
 
+    public function update(Request $request): Response
+    {
+        $v = new Validator($request->body());
+        $v->in('reason', [
+              'customer_refused', 'wrong_address', 'not_reachable',
+              'damaged', 'wrong_product', 'duplicate', 'other'
+          ])
+          ->maxLength('notes', 1000);
+
+        if ($v->fails()) {
+            return Response::validationError($v->errors());
+        }
+
+        $return = $this->service->update(
+            (int)$request->param('id'),
+            $request->storeId(),
+            $request->body()
+        );
+
+        if (!$return) {
+            return Response::notFound('Return not found');
+        }
+
+        return Response::success($return, 'Return updated successfully');
+    }
+
     public function updateStatus(Request $request): Response
     {
         $v = new Validator($request->body());
@@ -82,5 +108,15 @@ class ReturnController
         }
 
         return Response::success($return, 'Return status updated');
+    }
+
+    public function destroy(Request $request): Response
+    {
+        $deleted = $this->service->delete((int)$request->param('id'), $request->storeId());
+        if (!$deleted) {
+            return Response::notFound('Return not found');
+        }
+
+        return Response::success(null, 'Return deleted successfully');
     }
 }

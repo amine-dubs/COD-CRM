@@ -49,7 +49,14 @@ class OrderRepository
         );
     }
 
-    public function paginate(int $storeId, int $page, int $perPage, array $filters): array
+    public function paginate(
+        int $storeId,
+        int $page,
+        int $perPage,
+        array $filters,
+        string $sort = 'created_at',
+        string $direction = 'desc'
+    ): array
     {
         $where = 'o.store_id = ?';
         $params = [$storeId];
@@ -88,12 +95,23 @@ class OrderRepository
 
         $offset = ($page - 1) * $perPage;
 
+        $sortableColumns = [
+            'reference' => 'o.reference',
+            'customer_name' => 'o.customer_name',
+            'total_amount' => 'o.total_amount',
+            'status' => 'o.status',
+            'created_at' => 'o.created_at',
+        ];
+
+        $sortColumn = $sortableColumns[$sort] ?? 'o.created_at';
+        $sortDirection = strtolower($direction) === 'asc' ? 'ASC' : 'DESC';
+
         $data = $this->db->query(
             "SELECT o.*, w.name as wilaya_name
              FROM orders o
              LEFT JOIN wilayas w ON o.wilaya_id = w.id
              WHERE {$where}
-             ORDER BY o.created_at DESC
+             ORDER BY {$sortColumn} {$sortDirection}, o.id DESC
              LIMIT {$perPage} OFFSET {$offset}",
             $params
         );

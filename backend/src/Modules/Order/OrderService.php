@@ -29,9 +29,16 @@ class OrderService
         $this->db = Database::getInstance();
     }
 
-    public function list(int $storeId, int $page, int $perPage, array $filters): array
+    public function list(
+        int $storeId,
+        int $page,
+        int $perPage,
+        array $filters,
+        string $sort = 'created_at',
+        string $direction = 'desc'
+    ): array
     {
-        $result = $this->repo->paginate($storeId, $page, $perPage, $filters);
+        $result = $this->repo->paginate($storeId, $page, $perPage, $filters, $sort, $direction);
         $result['data'] = array_map(fn(array $o) => $this->hydrateOrder($o), $result['data']);
         return $result;
     }

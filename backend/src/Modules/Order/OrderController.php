@@ -24,6 +24,8 @@ class OrderController
     {
         $page    = (int)$request->query('page', 1);
         $perPage = (int)$request->query('per_page', 25);
+        $sort = (string)$request->query('sort', 'created_at');
+        $direction = strtolower((string)$request->query('direction', 'desc'));
         $filters = [
             'status'      => $request->query('status'),
             'wilaya_id'   => $request->query('wilaya_id'),
@@ -32,7 +34,7 @@ class OrderController
             'search'      => $request->query('search'),
         ];
 
-        $result = $this->service->list($request->storeId(), $page, $perPage, $filters);
+        $result = $this->service->list($request->storeId(), $page, $perPage, $filters, $sort, $direction);
         return Response::paginated($result['data'], $result['total'], $page, $perPage);
     }
 

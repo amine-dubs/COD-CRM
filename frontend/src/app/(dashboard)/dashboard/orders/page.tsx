@@ -294,14 +294,66 @@ export default function OrdersPage() {
     try {
       if (editingOrder) {
         await apiClient.put(`/orders/${editingOrder.id}`, payload);
+        closeModal();
+        fetchOrders();
       } else {
         await apiClient.post("/orders", payload);
+        closeModal();
+
+        // New orders are most visible in the default latest-first view.
+        if (search || statusFilter || sortKey !== "created_at" || sortDir !== "desc") {
+          setSearch("");
+          setStatusFilter("");
+          setSortKey("created_at");
+          setSortDir("desc");
+        }
+
+        if (page !== 1) {
+          setPage(1);
+        } else {
+          fetchOrders();
+        }
       }
-      closeModal();
-      fetchOrders();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || t(editingOrder ? "orders.error_update" : "orders.error_create");
-      setFormErrors({ submit: msg });
+      const fallbackMsg = t(editingOrder ? "orders.error_update" : "orders.error_create");
+      const responseData = (err as {
+        response?: {
+          data?: {
+            message?: string;
+            errors?: Record<string, unknown>;
+          };
+        };
+      })?.response?.data;
+
+      const backendErrors = responseData?.errors;
+      if (backendErrors && typeof backendErrors === "object") {
+        const detailedErrors: Record<string, string> = {};
+
+        Object.entries(backendErrors).forEach(([key, raw]) => {
+          const normalizedKey = key.startsWith("items.") ? "items" : key;
+
+          let message = "";
+          if (Array.isArray(raw)) {
+            message = raw.map((v) => String(v)).join(" ").trim();
+          } else if (typeof raw === "string") {
+            message = raw.trim();
+          }
+
+          if (!message) return;
+          detailedErrors[normalizedKey] = detailedErrors[normalizedKey]
+            ? `${detailedErrors[normalizedKey]} ${message}`.trim()
+            : message;
+        });
+
+        const firstDetail = Object.values(detailedErrors)[0];
+        detailedErrors.submit = firstDetail
+          ? `${responseData?.message || fallbackMsg}: ${firstDetail}`
+          : responseData?.message || fallbackMsg;
+
+        setFormErrors(detailedErrors);
+      } else {
+        setFormErrors({ submit: responseData?.message || fallbackMsg });
+      }
     } finally {
       setSaving(false);
     }
