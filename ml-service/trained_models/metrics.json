@@ -1,5 +1,5 @@
 {
-  "trained_at": "2026-04-04T19:17:25.634243",
+  "trained_at": "2026-04-04T21:14:52.695610",
   "dataset": "crm_database",
   "source_file": "MySQL cod_crm.orders",
   "total_orders": 6042,
@@ -159,7 +159,7 @@
     "n_clusters": 4,
     "total_customers": 1395,
     "silhouette_score": 0.5066,
-    "davies_bouldin_score": 0.6549,
+    "davies_bouldin_score": 0.655,
     "segments": {
       "At Risk": {
         "count": 431,
@@ -180,7 +180,7 @@
         "percentage": 54.6,
         "avg_recency": 157.0,
         "avg_frequency": 2.84,
-        "avg_monetary": 35679.0
+        "avg_monetary": 35726.97
       },
       "VIP": {
         "count": 43,
