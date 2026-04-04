@@ -10,6 +10,7 @@ import { useI18n } from "@/providers/i18n-provider";
 import { WILAYAS } from "@/lib/constants/wilayas";
 import apiClient from "@/lib/api/client";
 import type { OrderRiskRequest } from "@/types/ai";
+import type { Order } from "@/types/order";
 
 const toLocalDateTimeValue = (date: Date): string => {
   const normalized = new Date(date);
@@ -98,6 +99,10 @@ export function RiskPredictionForm({ onSubmit, isLoading }: RiskPredictionFormPr
   const [error, setError] = useState<string | null>(null);
   const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(false);
+  const [existingOrders, setExistingOrders] = useState<Order[]>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [selectedExistingOrderId, setSelectedExistingOrderId] = useState("");
+  const [existingOrderLoading, setExistingOrderLoading] = useState(false);
   const orderDateParts = useMemo(() => parseOrderDateParts(form.order_date), [form.order_date]);
 
   useEffect(() => {
@@ -134,12 +139,40 @@ export function RiskPredictionForm({ onSubmit, isLoading }: RiskPredictionFormPr
       }
     };
 
-    void loadCategoryOptions();
+    const loadRecentOrders = async () => {
+      setOrdersLoading(true);
+      try {
+        const res = await apiClient.get("/orders?page=1&per_page=50&sort=created_at&direction=desc");
+        const fetchedOrders: Order[] = Array.isArray(res.data?.data) ? res.data.data : [];
+        if (active) {
+          setExistingOrders(fetchedOrders);
+        }
+      } catch {
+        if (active) {
+          setExistingOrders([]);
+        }
+      } finally {
+        if (active) {
+          setOrdersLoading(false);
+        }
+      }
+    };
+
+    void Promise.all([loadCategoryOptions(), loadRecentOrders()]);
 
     return () => {
       active = false;
     };
   }, []);
+
+  const existingOrderOptions = useMemo(
+    () =>
+      existingOrders.map((order) => ({
+        value: String(order.id),
+        label: `${order.reference} — ${order.customer_name} — ${Math.round(order.total_amount).toLocaleString(locale === "fr" ? "fr-FR" : locale === "ar" ? "ar-DZ" : "en-US")} DZD`,
+      })),
+    [existingOrders, locale]
+  );
 
   const wilayaOptions = useMemo(
     () => [
@@ -218,6 +251,83 @@ export function RiskPredictionForm({ onSubmit, isLoading }: RiskPredictionFormPr
     update("order_date", toLocalDateTimeValue(nextDate));
   };
 
+  const applyExistingOrder = async () => {
+    if (!selectedExistingOrderId) return;
+
+    setExistingOrderLoading(true);
+    setError(null);
+
+    try {
+      const res = await apiClient.get(`/orders/${selectedExistingOrderId}`);
+      const order = res.data?.data as Order | undefined;
+
+      if (!order) {
+        setError(t("ai.existing_order_load_failed"));
+        return;
+      }
+
+      const ml = order.ml_features ?? {};
+      const orderDate = order.created_at
+        ? toLocalDateTimeValue(new Date(order.created_at))
+        : form.order_date;
+      const wilayaCode = order.wilaya_id
+        ? WILAYAS.find((w) => w.id === order.wilaya_id)?.code
+        : undefined;
+      const itemCount = Array.isArray(order.items)
+        ? Math.max(
+            1,
+            order.items.reduce((sum, item) => sum + Math.max(1, Number(item.quantity || 0)), 0)
+          )
+        : 1;
+
+      setForm((prev) => ({
+        ...prev,
+        order_id: order.id,
+        customer_name: order.customer_name || prev.customer_name,
+        customer_phone: order.customer_phone || prev.customer_phone,
+        wilaya_id: order.wilaya_id ?? prev.wilaya_id,
+        customer_state: wilayaCode ?? prev.customer_state,
+        commune: order.commune || prev.commune,
+        subtotal: Number(order.subtotal ?? prev.subtotal ?? 0),
+        shipping_cost: Number(order.shipping_cost ?? prev.shipping_cost ?? 0),
+        total_amount: Number(
+          order.total_amount ??
+            (Number(order.subtotal ?? prev.subtotal ?? 0) +
+              Number(order.shipping_cost ?? prev.shipping_cost ?? 0))
+        ),
+        n_items: itemCount,
+        order_date: orderDate,
+        product_category:
+          typeof ml.product_category === "string"
+            ? ml.product_category
+            : prev.product_category,
+        estimated_delivery_days: Number(
+          ml.estimated_delivery_days ?? prev.estimated_delivery_days ?? 7
+        ),
+        avg_product_weight: Number(
+          ml.avg_product_weight ?? prev.avg_product_weight ?? 1
+        ),
+        avg_photos: Number(ml.avg_photos ?? prev.avg_photos ?? 1),
+        avg_desc_length: Number(
+          ml.avg_desc_length ?? prev.avg_desc_length ?? 500
+        ),
+        avg_name_length: Number(
+          ml.avg_name_length ?? prev.avg_name_length ?? 30
+        ),
+        avg_volume: Number(ml.avg_volume ?? prev.avg_volume ?? 10000),
+        seller_customer_same_state:
+          ml.seller_customer_same_state === 0 || ml.seller_customer_same_state === 1
+            ? ml.seller_customer_same_state
+            : prev.seller_customer_same_state,
+        n_sellers: Number(ml.n_sellers ?? prev.n_sellers ?? 1),
+      }));
+    } catch {
+      setError(t("ai.existing_order_load_failed"));
+    } finally {
+      setExistingOrderLoading(false);
+    }
+  };
+
   const updateOrderDateParts = (datePart: string, timePart: string) => {
     if (!datePart) {
       update("order_date", "");
@@ -258,6 +368,26 @@ export function RiskPredictionForm({ onSubmit, isLoading }: RiskPredictionFormPr
     <AiCard title={t("ai.order_details")}>
       <form onSubmit={handleSubmit} className="space-y-5">
         <p className="text-xs text-muted-foreground">{t("ai.risk_form_focus_note")}</p>
+
+        <div className="rounded-lg border border-border p-3 space-y-3">
+          <Select
+            label={t("ai.existing_order_source_label")}
+            value={selectedExistingOrderId}
+            options={existingOrderOptions}
+            onChange={(e) => setSelectedExistingOrderId(e.target.value)}
+            placeholder={t("ai.existing_order_select")}
+            hint={ordersLoading ? t("ai.existing_order_loading") : t("ai.existing_order_hint")}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            isLoading={existingOrderLoading}
+            disabled={!selectedExistingOrderId || existingOrderLoading}
+            onClick={applyExistingOrder}
+          >
+            {t("ai.existing_order_load")}
+          </Button>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div className="space-y-2 md:col-span-2">
